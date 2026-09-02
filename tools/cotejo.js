@@ -161,7 +161,13 @@ MARCADORES.forEach(function (m) {
 /* Limpieza: ver la nota de la cabecera. */
 var limpiada = false;
 if (bajamosNosotros && !conservar) {
-  fs.readdirSync(dir).forEach(function (f) { fs.unlinkSync(path.join(dir, f)); });
+  /* .gitkeep se conserva: es lo unico que mantiene la carpeta en Git, y sin
+     ella un clon nuevo no la tendria y .clasp.json apuntaria a una ruta que no
+     existe. Todo lo demas se borra (ver la nota de la cabecera). */
+  fs.readdirSync(dir).forEach(function (f) {
+    if (f === '.gitkeep') return;
+    fs.unlinkSync(path.join(dir, f));
+  });
   limpiada = true;
 }
 
