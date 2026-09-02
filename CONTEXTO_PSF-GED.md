@@ -2318,3 +2318,108 @@ aprobadores, A5 retención y respaldo.
 - **Distinguir 401 de 403 ahorra trabajo.** El primer push devolvió 403, o sea
   que la autenticación había funcionado y solo faltaba autorización. Leerlo bien
   descartó de entrada toda una rama de diagnóstico.
+
+---
+
+## 17. LA FORMA LARGA DEL RUC — ANALIZADA Y APLAZADA A PROPÓSITO
+
+**Decisión del usuario (2-sep): esperar un documento real de PFI antes de
+implementar nada.** No hay todavía ninguno a la vista.
+
+### La propuesta
+
+Si el documento trajera el RUC como `155709241-2-2021`, extraer el comienzo de
+la cadena y, si coincide con el parámetro de `NITS_PROPIOS`, tratarlo como
+PROPIO. Así el reconocimiento deja de depender de la forma de representación.
+
+### Qué pasa hoy con la forma larga (medido, no supuesto)
+
+`limpiarNIT()` junta los dígitos y rechaza más de 10, así que
+`155709241-2-2021` → 14 dígitos → `null`. De ahí salen dos comportamientos:
+
+| El modelo propone | Resultado |
+|---|---|
+| `PFI` | origen PFI, correcto — **pero por suerte, no por reconocimiento**. Queda el aviso "la identificación no tiene forma válida; se ignora" |
+| `CLI` u otro | origen queda `CLI`, **`REVISAR = true`**, con dos avisos |
+
+⚠️ **Corrección de una advertencia anterior de este mismo anexo:** el fallo de la
+forma larga **no es silencioso**. O sale bien dejando rastro en NOTAS, o va a
+REVISAR. Nunca archiva mal en silencio. Eso baja la urgencia: lo que se pierde
+es que el reconocimiento pasa a depender de que el modelo acierte el origen solo.
+
+### Por qué la versión simple ("los primeros 9") es peligrosa
+
+El prefijo `155709241` **choca con identificaciones colombianas legítimas**:
+
+| Número | Qué es | ¿Choca? |
+|---|---|---|
+| `1557092416` | el NIT colombiano `155709241` con su DV real, que es 6 | **sí** |
+| `1557092410` | una cédula de 10 dígitos de ese rango | **sí** |
+| `15570924122021` | el RUC de PFI en forma larga | sí (el buscado) |
+
+El primero no es hipotético: es exactamente la salida de
+`canonizarIdentificacion('NIT', '155709241')`. Ese tercero quedaría archivado
+como documento propio de PFI, en la carpeta `PROPIO`, sin identificación en el
+nombre — **y eso sí sería silencioso**. La propuesta simple cambiaría un fallo
+visible por uno invisible.
+
+### El diseño que sí funciona (para cuando llegue el documento)
+
+Tres condiciones, todas necesarias:
+
+1. **Aplicar el prefijo solo si la cadena de dígitos supera los 10.** Por debajo
+   de 11 ya hay un camino que funciona —coincidencia exacta o canónica— y el
+   prefijo no debe intervenir. Por encima de 10, hoy el resultado es `null`:
+   pérdida total. Así el cambio **solo agrega reconocimiento donde hoy no hay
+   ninguno**, y el riesgo de regresión es cero por construcción, no por cuidado.
+   Verificado: con esta guarda ninguno de los tres casos de arriba colisiona.
+2. **Derivar la longitud del prefijo de la propia clave de `NITS_PROPIOS`**, en
+   vez de fijar un 9 que se desactualiza. La pregunta pasa a ser "¿la cadena
+   empieza por alguna clave propia?" y sirve para cualquier longitud.
+3. **Dejar aviso en cada coincidencia por prefijo.** Para el 7.5 es trazabilidad,
+   no cosmética.
+
+Más el ajuste de la **regla 7 del prompt**, que hoy dice *"escribe 155709241
+completo, sin quitarle el último dígito"*: frente a un documento con forma larga,
+"completo" es ambiguo. Debe pedir solo la parte base. Si no, prompt y código
+compiten — la causa raíz de la mitad de los hallazgos de este proyecto.
+
+### Por qué esto es aceptable para un PROPIO y no lo sería para un tercero
+
+Verificado en ejecución: al reconocer una identificación propia, el validador
+hace `c.nit = null`. Resultado para un documento de PFI:
+
+```
+serieDe        = RG-GF
+claveLogica    = RG|GF|PROPIO|ESTADOS-FINANCIEROS
+nombre archivo = RG-GF-001_V01_Estados-Financieros_20260902.pdf
+```
+
+La identificación **no llega al nombre, ni a la serie, ni a la clave lógica**: es
+solo una llave de búsqueda. Por eso el problema de forma canónica que en agosto
+partió un tercero en dos expedientes **aquí no puede ocurrir** — no hay nada que
+partir. En un tercero, el mismo mecanismo sí sería peligroso.
+
+### ⚠️ La trampa de implementarlo a ciegas
+
+La propuesta asume que el parámetro `155709241` es el **comienzo** de la forma
+larga. Si el RUC real no empezara por ahí, la guarda no se dispararía nunca **y
+no habría forma de notarlo**: el silencio sería idéntico al de "no hizo falta".
+
+Por eso implementarlo no habría cerrado B1; solo habría cambiado la pregunta
+pendiente de *"¿en qué forma viene?"* a *"¿confirmamos que empieza por
+155709241?"*. Esperar el documento resuelve las dos de una vez.
+
+### Idea anotada para cuando se retome
+
+Hoy `limpiarNIT()` no distingue *"menos de 7 dígitos"* de *"más de 10"*. El
+segundo caso es justo la señal que estamos esperando. Registrarlo en BITACORA con
+el texto crudo haría que **el primer documento de PFI conteste la pregunta por sí
+solo**, sin que nadie tenga que acordarse de mirar. Encaja con el pendiente ya
+abierto de los huecos de la bitácora.
+
+### Lo que sigue sin resolver, en cualquier caso
+
+Un **tercero extranjero** con RUC largo sigue perdiendo la identificación y
+yendo a REVISAR. La propuesta está acotada a los propios. Va junto a la
+limitación de pasaportes.

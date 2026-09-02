@@ -93,17 +93,42 @@ Todo el control del sistema depende de que una persona escriba `APROBADO`.
 
 # FASE B — Preparación técnica
 
-### B1. 🔴 NIT real de PFI
+### B1. 🟡 Identificación real de PFI — implementada, falta prueba de campo
 
-Es el último bloqueante técnico pendiente. ⚠️ **Va en dos formatos distintos y
-esa asimetría es exactamente la que causó el hallazgo del NIT:**
+⚠️ **La versión 1 de este checklist decía "NIT real de PFI, en forma canónica de
+10 dígitos". Esa premisa era falsa.** PFI no tiene NIT colombiano: se identifica
+con **RUC 155709241**, una identificación tributaria extranjera **sin dígito de
+verificación de la DIAN**. Sin este cambio, el código habría convertido ese
+número en `1557092416` —un DV inventado— y en silencio, porque la verificación
+de coherencia solo corre para el tipo `NIT`. Ver sección 12 del ANEXO 4.
 
-- [ ] En `Taxonomia.gs`, `NITS_PROPIOS`: reemplazar `'9999999999'` por el NIT
-      real **en forma canónica de 10 dígitos** (9 dígitos + DV).
-- [ ] En `Clasificador.gs`, regla 7 del prompt: agregarlo **en 9 dígitos**, que
-      es lo que se le pide transcribir al modelo.
-- [ ] Verificar con `canonizarIdentificacion('NIT', '<9 dígitos>')` que el
-      resultado coincida con la clave de `NITS_PROPIOS`.
+Hecho el 2-sep-2026:
+
+- [x] `Taxonomia.gs`: `TIPOS_ID.RUC` con `llevaDV: false`
+- [x] `Taxonomia.gs`: `NITS_PROPIOS['155709241'] = 'PFI'`, sin el comodín
+- [x] `Clasificador.gs`: `RUC` en el enum del esquema y regla 7 reescrita
+- [x] `Clasificador.gs`: guarda que busca `NITS_PROPIOS` por la forma canónica
+      **y por la cruda**, porque las claves ya no comparten forma
+- [x] `test/prueba_origen.js`: sección 9, 13 aserciones (55 → 68)
+- [x] Empujado a Apps Script y cotejado (9 de 9 idénticos)
+
+⚠️ **Lo que falta, y por qué no está cerrado:**
+
+- [ ] **Ver un documento real de PFI** y confirmar en qué forma aparece el RUC.
+      Si trae sufijos (`155709241-2-2021`), `limpiarNIT()` junta los dígitos,
+      rechaza más de 10 y devuelve `null`: la identificación se pierde. El fallo
+      **no es silencioso** —o queda un aviso en NOTAS, o el documento va a
+      REVISAR— pero el reconocimiento pasa a depender de que el modelo proponga
+      `PFI` por su cuenta.
+- [ ] **Prueba de campo** con ese documento.
+- [ ] Reanudar (`PAUSADO = false`) cuando lo anterior esté resuelto.
+
+**Diseño ya analizado y aplazado a propósito** (2-sep): reconocer la forma larga
+por prefijo, aplicándolo **solo si la cadena supera los 10 dígitos** y derivando
+la longitud de la clave de `NITS_PROPIOS`. Sin esa guarda de longitud colisiona
+con identificaciones colombianas legítimas —`1557092416` es exactamente lo que da
+un NIT colombiano `155709241` con su DV real—. Se aplazó para decidirlo sobre un
+documento real y no sobre una forma supuesta.
 
 ### B2. ✅ Archivos de código al día — CERRADO 2-sep-2026
 
