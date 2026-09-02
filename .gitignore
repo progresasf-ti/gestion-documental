@@ -1,0 +1,21 @@
+# Copia transitoria que baja `clasp pull` para el cotejo.
+# Se ignora su contenido, pero la carpeta SE CONSERVA (.gitkeep) porque
+# .clasp.json apunta ahi su rootDir.
+#
+# ⚠️ Tiene que quedar VACIA entre corridas: si se deja llena con una copia
+# vieja, un `clasp push` accidental la subiria al editor y revertiria los
+# cambios. `node tools/cotejo.js` la limpia solo al terminar.
+cotejo/*
+!cotejo/.gitkeep
+
+# Credenciales de clasp. Viven en el perfil del usuario, no aqui, pero se
+# ignoran por si alguien las copia al proyecto.
+.clasprc.json
+
+# Node
+node_modules/
+
+# Windows / macOS
+Thumbs.db
+desktop.ini
+.DS_Store

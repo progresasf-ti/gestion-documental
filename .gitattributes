@@ -1,0 +1,12 @@
+# Finales de linea LF en todo el repositorio, tambien en Windows.
+#
+# No es preferencia de estilo: el editor de Apps Script sirve los archivos con
+# LF, y `tools/cotejo.js` los compara contra src/. Si Git convirtiera a CRLF al
+# clonar, la comparacion byte a byte (SHA256) fallaria siempre y habria que
+# confiar solo en la comparacion normalizada, que es mas debil.
+* text=auto eol=lf
+
+# Binarios, si algun dia entra alguno (PDF de prueba, capturas).
+*.pdf binary
+*.png binary
+*.jpg binary
