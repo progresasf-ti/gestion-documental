@@ -2036,3 +2036,285 @@ aprobadores, A5 retención y respaldo.
 - **Cubrir el caso inofensivo también.** `resumenDiario()` no podía romper nada
   con `PAUSADO` a medias, pero dejarlo fuera obligaba a recordar la excepción
   justo en el momento de más prisa.
+
+
+---
+
+# ANEXO 4 (continuación) — Sesión del 2 de septiembre de 2026
+
+> Continúa el anexo anterior. El proyecto pasó a estar versionado en Git, y el
+> último bloqueante técnico resultó no ser lo que el checklist decía que era.
+
+---
+
+## 10. RESULTADO DE LA SEGUNDA MITAD
+
+- **El proyecto está en GitHub**, privado, en la cuenta `progresasf-ti`.
+- **B1 quedó implementado, pero la premisa del checklist era falsa:** PFI no
+  tiene NIT colombiano, tiene **RUC**. El código lo habría tratado como NIT y le
+  habría inventado un dígito de verificación, en silencio.
+- El cambio está empujado a Apps Script y cotejado (9 de 9 idénticos).
+- **El sistema quedó con `PAUSADO = true`**, a la espera de la verificación de
+  la forma del RUC y de la prueba de campo.
+
+---
+
+## 11. VERSIONAMIENTO EN GIT
+
+### El repositorio
+
+`https://github.com/progresasf-ti/gestion-documental` — **privado**. Contiene
+material interno (decisiones del SGC, NIT de la compañía, reglas del prompt,
+correo de un empleado), pero **ningún secreto**: la clave de la API se lee de
+Propiedades del script y nunca está en el código. Se verificó antes de subir.
+
+```
+9293b8b  cotejo.js: conservar .gitkeep al limpiar
+0198973  PFI se identifica con RUC, no con NIT colombiano (B1)
+4cd956c  Importación inicial del sistema PSF GED
+f0c84c2  Initial commit (README, creado desde la web)
+```
+
+Autoría: `Angel Castaño <tecnologia@progresasf.com>`.
+
+### ⚠️ Aquí GitHub solo funciona por SSH
+
+**Es el hallazgo operativo más reutilizable de la sesión.** Todo push por HTTPS
+se cuelga, y no por culpa de Git ni de GitHub: el entorno donde se ejecutan los
+comandos trae
+
+```
+GCM_INTERACTIVE     never
+GIT_TERMINAL_PROMPT 0
+GIT_ASKPASS         (vacío)
+```
+
+es decir, Credential Manager tiene **prohibido** mostrar el diálogo de
+autenticación. Nunca se abre el navegador y el comando espera para siempre.
+Lanzar el push a mano tampoco sirve: hereda el mismo entorno.
+
+Se resolvió con **clave SSH**, que no pasa por ese mecanismo: la clave está en
+disco y no hay nada que preguntar.
+
+- `~/.ssh/progresasf_ti` (ed25519), **sin contraseña** — es lo que permite
+  empujar sin diálogos, y el precio es que quien acceda a los archivos del
+  usuario puede empujar al repositorio.
+- `~/.ssh/config` con `IdentitiesOnly yes`: sin eso ssh ofrecería también la
+  clave `multipli_vps` y GitHub podría cortar antes de llegar a la correcta.
+- `known_hosts` se sembró **verificando** la huella contra la que GitHub publica
+  (`SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU`), no aceptándola a
+  ciegas. La pregunta de confianza de la primera conexión se habría colgado por
+  las mismas variables.
+
+Las credenciales HTTPS de la cuenta `angelcastano` siguen guardadas y sin tocar;
+los demás repositorios funcionan como antes.
+
+### `.gitattributes` con `eol=lf`
+
+No es estilo. El editor de Apps Script sirve los archivos con LF y
+`tools/cotejo.js` los compara contra `src/`. Con la conversión automática de
+Windows a CRLF, **la comparación byte a byte por SHA256 fallaría en cualquier
+clon nuevo** y habría que confiar solo en la normalizada, que es más débil.
+
+### ⚠️ La trampa del README
+
+El repositorio se creó marcando *"Initialize with README"*, así que el remoto
+tenía un commit propio y el push fue rechazado: dos historias sin ancestro
+común. Se resolvió con `git rebase origin/main` —historia lineal, el README
+conservado como raíz— sin perder nada y sin forzar.
+
+**Al crear el repositorio de corporativo, dejar esa casilla SIN marcar.**
+
+### Cómo se empuja código a Apps Script
+
+`.clasp.json` apunta su `rootDir` a `cotejo/` y **nunca a `src/`**, de modo que
+ningún comando pueda pisar el código bueno. Para empujar de verdad hay que crear
+a propósito una configuración aparte con `rootDir: "src"`, usarla y borrarla:
+
+```
+clasp push -P clasp-push.json     # y se borra el archivo enseguida
+```
+
+⚠️ `clasp` **rechaza un `rootDir` fuera del directorio del archivo de proyecto**
+(protección contra recorrido de rutas), así que ese archivo tiene que estar en
+la raíz del repositorio. No dejarlo ahí: la capacidad de empujar debe crearse
+cada vez, deliberadamente.
+
+---
+
+## 12. B1 — PFI SE IDENTIFICA CON RUC, NO CON NIT
+
+### La premisa del checklist era falsa
+
+B1 decía: *"reemplazar `'9999999999'` por el NIT real en forma canónica de 10
+dígitos (9 dígitos + DV)"* y *"agregarlo en 9 dígitos a la regla 7"*. Daba por
+hecho un NIT colombiano.
+
+**Dato real: PFI se identifica con RUC 155709241.** Es una identificación
+tributaria extranjera. No tiene dígito de verificación de la DIAN.
+
+### Lo que habría hecho el código sin tocarlo
+
+`canonizarIdentificacion()` no conocía `RUC`. Un tipo desconocido **se trata como
+NIT** (comportamiento deliberado, para que el mismo número no salga canonizado
+de dos formas según por dónde entre). Resultado verificado ejecutando el código:
+
+```
+canonizarIdentificacion('NIT', '155709241')  ->  1557092416
+canonizarIdentificacion('RUC', '155709241')  ->  1557092416   (RUC no existía)
+```
+
+Un `6` calculado con la fórmula de la DIAN y pegado a una identificación
+panameña. **Ese número no existe en ningún registro.**
+
+⚠️ Y habría pasado **en silencio**: `nitEsCoherente()` solo valida cuando el tipo
+es `NIT`, y como el DV lo calculó el propio sistema, siempre habría cuadrado. El
+único aviso posible nunca se habría disparado.
+
+### Qué se cambió
+
+**`Taxonomia.gs`**
+- `TIPOS_ID.RUC` con `llevaDV: false`. Marcar un tipo con `llevaDV: true`
+  significa *"este número obedece la fórmula de la DIAN"*, y para una
+  identificación extranjera eso es falso.
+- `NITS_PROPIOS['155709241'] = 'PFI'`, reemplazando el comodín.
+
+⚠️ **Las claves de `NITS_PROPIOS` ya NO comparten forma:** NIT colombiano con DV
+(10 dígitos), RUC tal cual (9). Antes la tabla era homogénea y ahora no; está
+escrito en el comentario para que nadie la "arregle".
+
+**`Clasificador.gs`**
+- `RUC` en el enum del esquema; la descripción de `nit` distingue que al NIT se
+  le quita el DV y al RUC **no se le quita nada**.
+- Regla 7 reescrita con las tres identificaciones propias y el efecto explícito
+  de equivocarse.
+- **Guarda nueva:** `NITS_PROPIOS` se consulta por la forma canónica **y por la
+  cruda**.
+
+### Por qué la guarda no es adorno
+
+Si el modelo marca el RUC como `NIT`, la canonización se va por la rama del DV,
+la clave deja de coincidir y **un documento propio de PFI se archiva como de un
+tercero**, con el `6` inventado en el nombre del archivo. Es el hallazgo del
+1-sep otra vez —el mismo tercero partido por dos formas del mismo número— pero
+entrando por la puerta del **tipo** de identificación en vez de la del número.
+
+La tabla dejó de ser homogénea, así que la búsqueda tenía que dejar de asumir
+que lo era.
+
+### Cobertura
+
+`test/prueba_origen.js`, sección 9 nueva: **13 aserciones, 55 → 68 ok**. Cubre
+el RUC sin DV, la idempotencia, el caso mal marcado como NIT, la regresión de
+PSF, y que el RUC llegue al prompt y al esquema.
+
+**Intervención sobre las pruebas, declarada:** se agregó `TIPOS_ID` al puente
+`__TAX` de la línea 10, porque los `const` no salen del `eval`. No se tocó
+ninguna fixtura ni aserción existente.
+
+### ⚠️ LO QUE SIGUE ABIERTO Y DECIDE SI ESTO ESTÁ TERMINADO
+
+**¿En qué forma aparece el RUC en los documentos reales de PFI?**
+
+Si viene como `155709241`, quedó bien. Pero los RUC panameños suelen escribirse
+con sufijos —del estilo `155709241-2-2021 DV 45`—, y `limpiarNIT()` junta todos
+los dígitos y **rechaza más de 10**: devolvería `null`, la identificación se
+perdería y PFI dejaría de reconocerse como propio.
+
+Ese caso no se arregla con un parche: exige decidir cuál es la forma canónica de
+un RUC, que es exactamente la decisión que faltó en agosto con el NIT.
+
+**Falta la prueba de campo** con un documento real de PFI. Verificado en local
+no es verificado en ejecución.
+
+---
+
+## 13. DOS DEFECTOS DE LA PROPIA HERRAMIENTA DE COTEJO
+
+Los dos aparecieron por **usarla**, no por revisarla, y los dos son la misma
+clase de error: una herramienta de verificación con un punto ciego propio.
+
+**13.1 El marcador de `PAUSADO` buscaba el valor.** Estaba escrito como
+`const PAUSADO = false;`, así que en cuanto el sistema se pausó a propósito el
+cotejo reportó *"HAY DERIVA"* — es decir, fallaba justo en el momento en que más
+se usa, durante un mantenimiento. Ahora busca solo `const PAUSADO`.
+
+**13.2 La limpieza borraba `cotejo/.gitkeep`.** Lo delató el propio commit, que
+incluía `D cotejo/.gitkeep`. En un clon nuevo la carpeta no habría existido y el
+`rootDir` de `.clasp.json` habría apuntado a una ruta inexistente. Corregido: la
+limpieza conserva ese archivo.
+
+---
+
+## 14. CÓMO QUEDÓ DESPLEGADO
+
+| | |
+|---|---|
+| `pruebas.js` | 133 pasadas, 0 fallidas |
+| `prueba_origen.js` | **68 ok, 0 fallas** (subió de 55) |
+| `fuzz.js` | 20.000 + 5.000, 0 excepciones, 0 invariantes violados |
+| Cotejo `src/` ↔ editor | **9 de 9 idénticos**, 0 marcadores faltantes |
+| `PAUSADO` | **`true`** — el sistema está detenido |
+
+⚠️ **El sistema está pausado**: las tres funciones salen sin hacer nada. Se dejó
+así a propósito, porque reanudar pondría a procesar documentos con un cambio
+cuya corrección todavía depende de la forma del RUC. Reanudar es cambiar la
+línea, empujar y hacer una prueba de humo.
+
+---
+
+## 15. PENDIENTES ACTUALIZADOS
+
+**Lo que decide si B1 está terminado**
+
+1. **Forma del RUC en los documentos reales de PFI** (12). Si trae sufijos, hay
+   que decidir la forma canónica.
+2. **Prueba de campo** con un documento real de PFI.
+3. **Reanudar** (`PAUSADO = false`) cuando 1 y 2 estén resueltos.
+
+**Corrección de documentación, urgente**
+
+4. **B1 del checklist está mal redactado**: habla de "NIT real de PFI… 10 dígitos
+   canónicos". Esa es la suposición que resultó falsa. Reescribirlo en términos
+   de RUC.
+
+**Deuda técnica: sin cambios** (pasaportes, `NOMBRE_ARCHIVO` al obsoletar,
+huecos de BITACORA, originales sin marcar, guarda `razonSocial` vs `titulo`,
+regla 10, refactor de `formatearAprobaciones()`).
+
+**Nuevo**
+
+5. Al crear el repositorio de corporativo, **no marcar la casilla del README**.
+6. Documentar en F4 que aquí GitHub solo funciona por SSH, y por qué (11).
+
+**Decisiones abiertas que condicionan la instalación**
+A1 ubicación del archivo documental, A2 cuenta ejecutora, A3 acta, A4
+aprobadores, A5 retención y respaldo.
+
+---
+
+## 16. LECCIONES DE MÉTODO
+
+- **Un pendiente puede traer escrita una suposición falsa.** B1 llevaba semanas
+  redactado como "el NIT real de PFI" y nadie dudó del sustantivo. El dato del
+  usuario —*RUC, no NIT*— cambió el trabajo entero. **Leer los pendientes como
+  hipótesis, no como especificaciones.**
+- **Un valor por defecto sensato puede volverse un error silencioso al cambiar
+  el dominio.** Tratar un tipo desconocido como NIT era la decisión correcta
+  cuando todas las identificaciones eran colombianas; con una extranjera, la
+  misma regla fabrica un número inexistente sin avisar.
+- **Cuando una tabla deja de ser homogénea, las búsquedas sobre ella también
+  tienen que dejar de asumirlo.** `NITS_PROPIOS` pasó a mezclar dos formas
+  canónicas, y por eso la búsqueda tuvo que pasar a consultar las dos.
+- **Las herramientas de verificación también tienen puntos ciegos, y solo se ven
+  usándolas.** Los dos defectos del cotejo salieron de correrlo en situaciones
+  reales —un sistema pausado, un commit— no de leerlo.
+- **La barrera de seguridad correcta es la que hay que desarmar a propósito.**
+  Empujar a Apps Script exige crear una configuración, usarla y borrarla; que
+  sea incómodo es la característica, no el defecto.
+- **Un síntoma de red o de permisos puede ser una variable de entorno.** El push
+  colgado parecía cosa de GitHub o de credenciales, y era `GCM_INTERACTIVE=never`
+  en el entorno donde corren los comandos.
+- **Distinguir 401 de 403 ahorra trabajo.** El primer push devolvió 403, o sea
+  que la autenticación había funcionado y solo faltaba autorización. Leerlo bien
+  descartó de entrada toda una rama de diagnóstico.
