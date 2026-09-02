@@ -24,10 +24,10 @@ function esquemaClasificacion() {
           description: 'Proceso del SGC al que pertenece el documento.' },
         origen: { type: 'string', enum: Object.keys(ORIGENES),
           description: 'A quién pertenece el documento. PSF/EQM/PFI si es propio.' },
-        tipoIdentificacion: { type: 'string', enum: ['NIT', 'CC', 'CE', 'TI'],
-          description: 'Tipo de identificacion del tercero, tal como aparece en el documento: NIT para empresas, CC para cedula de ciudadania, CE para cedula de extranjeria, TI para tarjeta de identidad. Si el documento no lo dice y el numero tiene 9 o mas digitos, usa NIT. Cadena vacia si es documento propio.' },
+        tipoIdentificacion: { type: 'string', enum: ['NIT', 'RUC', 'CC', 'CE', 'TI'],
+          description: 'Tipo de identificacion, tal como aparece en el documento: NIT para empresas colombianas, RUC para empresas extranjeras, CC para cedula de ciudadania, CE para cedula de extranjeria, TI para tarjeta de identidad. Si el documento no lo dice y el numero tiene 9 o mas digitos, usa NIT. Cadena vacia si no aparece ninguna identificacion.' },
         nit: { type: 'string',
-          description: 'Numero de identificacion del tercero, solo digitos, SIN el digito de verificacion y SIN puntos ni guiones. De "NIT 901.234.567-7" transcribe 901234567. Cadena vacia si es documento propio o no aparece.' },
+          description: 'Numero de identificacion, solo digitos, SIN puntos ni guiones. Si es un NIT colombiano, SIN el digito de verificacion: de "NIT 901.234.567-7" transcribe 901234567. Un RUC NO tiene digito de verificacion de la DIAN: transcribelo COMPLETO, sin quitarle nada. Cadena vacia si no aparece.' },
         razonSocial: { type: 'string',
           description: 'Nombre o razón social del tercero tal como aparece. Cadena vacía si no aplica.' },
         titulo: { type: 'string',
@@ -125,10 +125,19 @@ function construirPromptSistema() {
     '   Esto aplica AUNQUE el documento no mencione estudio de cupo, vinculacion ni',
     '   debida diligencia, y aunque no sepas para que se pidio. Decide de quien es el',
     '   documento, nunca para que se uso: el proposito no se puede leer en el documento.',
-    '7. Los NIT 900974255 (PSF) y 902074144 (EQUIMETRICA) son propios, no terceros.',
-    '   Transcribe siempre el NIT SIN el digito de verificacion: de "900.974.255-5"',
-    '   escribe 900974255. El sistema agrega el digito por su cuenta; si lo incluyes,',
-    '   el mismo tercero queda partido en dos expedientes distintos.',
+    '7. Son PROPIAS, no de terceros, estas tres identificaciones:',
+    '   - NIT 900974255 = PROGRESA SOLUCIONES FINANCIERAS (PSF)',
+    '   - NIT 902074144 = EQUIMETRICA (EQM)',
+    '   - RUC 155709241 = PROGRESA SOLUCIONES FINANCIERAS INTERNACIONALES (PFI)',
+    '   Para un NIT colombiano transcribe SIEMPRE los 9 digitos SIN el digito de',
+    '   verificacion: de "900.974.255-5" escribe 900974255. El sistema agrega el',
+    '   digito por su cuenta; si lo incluyes, el mismo tercero queda partido en dos',
+    '   expedientes distintos.',
+    '   El RUC de PFI es una identificacion EXTRANJERA y NO tiene digito de',
+    '   verificacion: escribe 155709241 completo, sin quitarle el ultimo digito, y',
+    '   pon RUC en el tipo de identificacion. Si le quitas un digito o lo marcas',
+    '   como NIT, un documento propio de PFI se archivara como si fuera de un',
+    '   tercero.',
     '8. TITULO: usa el nombre del ACTO O TRAMITE que el documento certifica, acredita o',
     '   documenta. El titulo describe lo que el documento ES, nunca quien lo emite ni',
     '   sobre quien trata.',
@@ -306,18 +315,28 @@ function validarClasificacion(bruto, ctx) {
 
   /* La identificación se lleva SIEMPRE a forma canónica. Sin esto el mismo
      tercero llega unas veces con DV y otras sin él, y se parte en dos series. */
-  c.nit = canonizarIdentificacion(c.tipoId, limpiarNIT(bruto.nit));
+  var idCruda = limpiarNIT(bruto.nit);
+  c.nit = canonizarIdentificacion(c.tipoId, idCruda);
   if (bruto.nit && !c.nit) avisos.push('La identificación "' + bruto.nit + '" no tiene forma válida; se ignora.');
   var coherente = c.tipoId === 'NIT' ? nitEsCoherente(c.nit) : null;
   if (coherente === false) avisos.push('El dígito de verificación del NIT ' + c.nit + ' no cuadra.');
 
-  /* origen — el NIT propio manda sobre lo que diga el modelo */
+  /* origen — la identificación propia manda sobre lo que diga el modelo */
   c.origen = String(bruto.origen || '').trim().toUpperCase();
-  if (c.nit && NITS_PROPIOS[c.nit]) {
-    var propio = NITS_PROPIOS[c.nit];
-    if (c.origen !== propio) avisos.push('Origen corregido de ' + (c.origen || '?') + ' a ' + propio + ' por NIT propio.');
+
+  /* Se busca por la forma CANÓNICA y también por la CRUDA. Las claves de
+     NITS_PROPIOS ya no comparten forma: el NIT colombiano va con DV (10 dígitos)
+     y el RUC de PFI sin él (9). Si el modelo se equivoca de TIPO_ID, la
+     canonización se va por la otra rama y la coincidencia se perdería EN
+     SILENCIO: un documento propio de PFI marcado como NIT saldría archivado como
+     de tercero, con un DV de la DIAN inventado en el nombre del archivo.
+     Es el mismo fallo que en agosto partió a un tercero en dos expedientes,
+     esta vez por la puerta del tipo de identificación en vez de la del número. */
+  var propio = (c.nit && NITS_PROPIOS[c.nit]) || (idCruda && NITS_PROPIOS[idCruda]) || null;
+  if (propio) {
+    if (c.origen !== propio) avisos.push('Origen corregido de ' + (c.origen || '?') + ' a ' + propio + ' por identificación propia.');
     c.origen = propio;
-    c.nit = null;   // los documentos propios no llevan NIT en el nombre
+    c.nit = null;   // los documentos propios no llevan identificación en el nombre
   }
   if (!ORIGENES[c.origen]) {
     avisos.push('Origen "' + bruto.origen + '" no reconocido; se asume PSF.');

@@ -7,7 +7,7 @@ const orden = ['Taxonomia.gs', 'Nomenclatura.gs', 'Indice.gs', 'Clasificador.gs'
 const fuente = orden
   .map(f => fs.readFileSync(path.join(__dirname, '../src', f), 'utf8'))
   .join('\n');
-eval(fuente + '\nglobalThis.__TAX = { ORIGENES_TERCEROS: ORIGENES_TERCEROS, NITS_PROPIOS: NITS_PROPIOS };');
+eval(fuente + '\nglobalThis.__TAX = { ORIGENES_TERCEROS: ORIGENES_TERCEROS, NITS_PROPIOS: NITS_PROPIOS, TIPOS_ID: TIPOS_ID };');
 const TAX = globalThis.__TAX;
 
 let ok = 0, fail = 0;
@@ -158,6 +158,37 @@ const cCC = validarClasificacion(
 t('cedula corta sobrevive', cCC.nit, '1234567');
 tv('y su nombre se reparsea',
    !!parsearNombre(construirNombre(cCC, 1, 1, '.pdf')));
+
+console.log('\n9. RUC de PFI: identificacion extranjera, sin DV de la DIAN');
+/* PFI se identifica con un RUC, no con un NIT colombiano. Antes de este cambio
+   canonizarIdentificacion le calculaba un DV de la DIAN y lo convertia en
+   1557092416, un numero que no existe en ningun registro. */
+t('el RUC no recibe DV', canonizarIdentificacion('RUC', '155709241'), '155709241');
+t('un NIT de 9 digitos si lo recibe', canonizarIdentificacion('NIT', '155709241'), '1557092416');
+tv('RUC es un tipo reconocido', !!TAX.TIPOS_ID['RUC']);
+tv('y no lleva DV', TAX.TIPOS_ID['RUC'].llevaDV === false);
+t('canonizar el RUC es idempotente',
+  canonizarIdentificacion('RUC', canonizarIdentificacion('RUC', '155709241')), '155709241');
+
+const pfi = (o) => validarClasificacion(Object.assign({
+  tipo: 'RG', proceso: 'GF', origen: 'PFI', tipoIdentificacion: 'RUC',
+  nit: '155709241', titulo: 'Estados Financieros', confianza: 0.9, justificacion: 'x'
+}, o), {}).clasificacion;
+
+t('PFI bien marcado -> origen PFI', pfi({}).origen, 'PFI');
+t('PFI bien marcado -> sin nit en el nombre', pfi({}).nit, null);
+/* La guarda: si el modelo marca el RUC como NIT, la canonizacion se va por la
+   rama del DV y la clave de NITS_PROPIOS deja de coincidir. Sin la busqueda por
+   la forma cruda, este documento propio se archivaria como de tercero. */
+t('PFI marcado como NIT -> sigue siendo propio', pfi({ tipoIdentificacion: 'NIT' }).origen, 'PFI');
+t('PFI marcado como NIT -> sin nit en el nombre', pfi({ tipoIdentificacion: 'NIT' }).nit, null);
+t('PFI propuesto como tercero -> corregido',
+  pfi({ origen: 'CLI', tipo: 'DE', proceso: 'GR' }).origen, 'PFI');
+t('PSF sigue reconociendose (regresion)',
+  pfi({ tipoIdentificacion: 'NIT', nit: '900974255', origen: 'PSF' }).origen, 'PSF');
+tv('el RUC llega al prompt', construirPromptSistema().indexOf('155709241') !== -1);
+tv('RUC esta en el enum del esquema',
+   JSON.stringify(esquemaClasificacion()).indexOf('"RUC"') !== -1);
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas\n');
 process.exit(fail ? 1 : 0);

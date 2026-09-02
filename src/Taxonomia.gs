@@ -53,22 +53,36 @@ const ORIGENES = {
 };
 
 /* ---------- TIPOS DE IDENTIFICACIÓN ----------------------------- *
- * Decide cómo se canoniza el número. Solo el NIT lleva dígito de
- * verificación; los documentos de persona natural se dejan tal cual
- * porque no lo tienen y su longitud es variable (7 a 10 dígitos).    */
+ * Decide cómo se canoniza el número. Solo el NIT colombiano lleva
+ * dígito de verificación; los demás se dejan tal cual porque no lo
+ * tienen y su longitud es variable (7 a 10 dígitos).
+ *
+ * ⚠️ El DV que calcula el sistema es el de la DIAN. Marcar un tipo
+ * con llevaDV:true significa "este número obedece esa fórmula". Para
+ * una identificación extranjera es FALSO: le inventaría un dígito
+ * que no existe en ningún registro, y como el propio sistema lo
+ * calcula, la verificación de coherencia siempre cuadraría.          */
 const TIPOS_ID = {
   NIT: { nombre: 'NIT', llevaDV: true },
+  RUC: { nombre: 'RUC (identificación tributaria extranjera)', llevaDV: false },
   CC:  { nombre: 'Cédula de ciudadanía', llevaDV: false },
   CE:  { nombre: 'Cédula de extranjería', llevaDV: false },
   TI:  { nombre: 'Tarjeta de identidad', llevaDV: false }
 };
 
-/* ---------- NITs PROPIOS ---------------------------------------- *
- * Las claves están en forma CANÓNICA: NIT de 9 dígitos + DV.        */
+/* ---------- IDENTIFICACIONES PROPIAS ---------------------------- *
+ * Sirven para RECONOCER que un documento es propio y no de tercero.
+ * Nunca se emiten: al encontrar coincidencia el validador pone el
+ * origen y borra el NIT, así que no llegan al nombre del archivo.
+ *
+ * Cada clave va en la forma CANÓNICA DE SU TIPO, que no es la misma
+ * para todos:
+ *   NIT colombiano → 9 dígitos + DV = 10   (PSF, EQM)
+ *   RUC extranjero → el número tal cual    (PFI)                     */
 const NITS_PROPIOS = {
   '9009742555': 'PSF',
   '9020741441': 'EQM',
-  '9999999999': 'PFI'
+  '155709241' : 'PFI'   // RUC, NO es un NIT: no lleva DV de la DIAN.
 };
 
 /* ---------- ORIGEN FIJO POR TERCERO (escotilla manual) ---------- *

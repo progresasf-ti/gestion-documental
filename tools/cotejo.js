@@ -41,7 +41,9 @@ var ARCHIVOS = ['Config.gs', 'Taxonomia.gs', 'Nomenclatura.gs', 'Indice.gs',
    editor, ese cambio nunca llego alla. El diff completo ya lo detectaria, pero
    estos ponen nombre al hallazgo en vez de dejar un bloque de lineas sueltas. */
 var MARCADORES = [
-  ['Config.gs',       'const PAUSADO = false;',           'interruptor de mantenimiento'],
+  /* Sin el valor: PAUSADO vale true durante un mantenimiento, que es justo
+     cuando mas se corre este cotejo. Buscar "= false" daria deriva falsa. */
+  ['Config.gs',       'const PAUSADO',                    'interruptor de mantenimiento'],
   ['Taxonomia.gs',    'const ORIGENES_TERCEROS',          'escotilla manual de origen'],
   ['Taxonomia.gs',    'const TIPOS_ID',                   'tipos de identificacion'],
   ['Taxonomia.gs',    "'9009742555': 'PSF'",              'NITS_PROPIOS en 10 digitos'],
