@@ -6,7 +6,7 @@
 
  /* Interruptor de mantenimiento. En true, los disparadores salen sin hacer
    nada. Volver a false al terminar. */
-const PAUSADO = true;
+const PAUSADO = false;
 
 const CONFIG = {
   /* Se llenan automáticamente al ejecutar instalarSistema(). */

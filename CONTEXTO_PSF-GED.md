@@ -2630,3 +2630,115 @@ aprobadores, A5 retención y respaldo.
 - **Un evento por documento, no uno por motivo.** El `else if` del `REVISAR`
   frente al `CONFLICTO` es deliberado: dos entradas para el mismo documento
   harían que contar eventos en BITACORA dejara de significar contar documentos.
+
+---
+
+# ANEXO 5 (continuación) — Prueba de campo de BITACORA
+
+> Cierra en ejecución los huecos de trazabilidad. Añade un hallazgo operativo
+> sobre `clasp` que costó una corrida en falso.
+
+---
+
+## 9. RESULTADO DE LA PRUEBA DE CAMPO
+
+**Cuatro de los cinco eventos nuevos, verificados en ejecución real:**
+
+| Evento | Cómo se provocó | Resultado |
+|---|---|---|
+| `SIN_TEXTO` | escaneo ilegible en la bandeja | ✓ registrado |
+| `OBSOLETO` | v2 de un certificado ya vigente, aprobado y ejecutado | ✓ registrado |
+| `DUPLICADO` | copia de un documento ya archivado | ✓ registrado |
+| `REVISAR` | documento genérico bajo el umbral de 0,75 | ✓ registrado |
+| `NO_CLASIFICADO` | — | **verificado por inspección, no en ejecución** |
+
+**Por qué `NO_CLASIFICADO` no se ejercitó, a propósito.** Exige que
+`validarClasificacion()` devuelva `ok:false`: un tipo o proceso fuera del enum,
+o un documento sin título. Con `tool_choice` forzado y los enums en el esquema
+de la herramienta, eso prácticamente no ocurre con un documento real, y
+fabricarlo habría exigido tocar el código o el esquema **solo para la prueba** —
+que es justamente sanear el caso de prueba al revés. Recorre además el mismo
+camino que los otros tres (`encolar` + `bitacora` con el mismo detalle), así que
+el riesgo residual es bajo. **Queda registrado como cubierto por inspección, no
+como probado.**
+
+Ningún documento produjo dos entradas. El `else if` entre `REVISAR` y
+`CONFLICTO` se sostiene.
+
+---
+
+## 10. HALLAZGO OPERATIVO — `clasp push` Y EL EDITOR ABIERTO NO CONVIVEN
+
+### El síntoma
+
+Tras empujar el código y cotejar **9 de 9 idénticos**, la primera corrida no
+registró nada en BITACORA. Un cotejo posterior mostró `Motor.gs` e `Indice.gs`
+otra vez en DIFIEREN, con el editor conservando las versiones **anteriores** al
+push — y `Config.gs` con el `PAUSADO = false` que el usuario acababa de poner.
+
+### La causa
+
+El editor de Apps Script estaba **abierto en el navegador desde antes del push**.
+Al guardar el cambio de `PAUSADO`, el editor guardó **toda su copia en memoria
+del proyecto**, no solo el archivo editado, y revirtió los dos archivos recién
+empujados. Los otros siete no se notaron porque eran idénticos en ambas
+versiones de todos modos.
+
+### La regla
+
+**Push → recargar la pestaña → recién ahí tocar el editor.** Cualquier pestaña
+abierta desde antes de un `clasp push` es una bomba de tiempo: su próximo
+guardado revierte el push, en silencio y sin conflicto.
+
+⚠️ Recargar **antes** del push no sirve de nada — es el error que se cometió al
+intentar corregirlo la primera vez. La recarga solo vale después.
+
+### Lo que salvó el diagnóstico
+
+`tools/cotejo.js`. Sin él, la conclusión natural habría sido "el evento
+`SIN_TEXTO` no funciona" y se habría depurado código que estaba bien. El cotejo
+mostró que el código correcto simplemente no estaba allá. Es la segunda vez que
+esta herramienta ataja una deriva que nadie habría notado.
+
+### Riesgo secundario, confirmado
+
+La corrida de diagnóstico se hizo con `node tools/cotejo.js --conservar`, que
+deja `cotejo/` llena de la copia **vieja** del editor. Con `.clasp.json`
+apuntando su `rootDir` ahí, un `clasp push` sin `-P` habría subido ese código
+viejo y revertido el proyecto. Se limpió antes de empujar. La advertencia del
+anexo 4 §5 no era teórica.
+
+---
+
+## 11. ESTADO AL CIERRE
+
+| | |
+|---|---|
+| Cotejo `src/` ↔ editor | **9 de 9 idénticos**, 0 marcadores faltantes |
+| `PAUSADO` | **`false`** — el sistema está corriendo otra vez |
+| Eventos de BITACORA nuevos | 4 probados en ejecución, 1 por inspección |
+
+`PAUSADO` volvió a `false` y así se deja: la razón por la que estaba pausado
+—la forma del RUC de PFI— quedó resuelta. El valor se bajó también a
+`src/Config.gs` para que el push no lo revirtiera.
+
+**Sigue pendiente la prueba de campo con un documento real de PFI** (§7.3). No
+exige el sistema pausado: si el RUC llegara en una forma inesperada, la guarda
+manda el documento a REVISAR, no lo archiva mal.
+
+---
+
+## 12. LECCIÓN DE MÉTODO
+
+- **Dos editores sobre el mismo archivo divergen aunque ninguno se equivoque.**
+  Es la misma lección del anexo 3 (`PAUSADO` perdido entre el editor y `src/`),
+  esta vez en la dirección contraria: allá un cambio no bajó al repositorio,
+  aquí una pestaña vieja revirtió lo que ya había subido. El repositorio y el
+  editor no se sincronizan solos en ninguna de las dos direcciones.
+- **Cuando una prueba falla, verificar primero que se probó lo que se cree.**
+  El primer reflejo fue buscar el error en el evento; el código correcto ni
+  siquiera estaba desplegado. Cotejar antes de depurar.
+- **No fabricar el caso de prueba tocando el código.** `NO_CLASIFICADO` se dejó
+  sin ejercitar y declarado como tal, en vez de forzar un esquema inválido para
+  producir un check verde. Un verde fabricado vale menos que un pendiente
+  honesto.
