@@ -47,15 +47,17 @@ function procesarUno(file, revision, indice) {
   /* Duplicado exacto: el mismo archivo ya fue registrado antes. */
   var dup = yaRegistrado(indice, ext.huella);
   if (dup) {
-    encolar(file, null, null, 'DUPLICADO',
-      'Contenido idéntico a ' + dup.CODIGO + ' (' + dup.NOMBRE_ARCHIVO + '). No requiere archivarse.', []);
+    var detalleDup = 'Contenido idéntico a ' + dup.CODIGO + ' (' + dup.NOMBRE_ARCHIVO + '). No requiere archivarse.';
+    encolar(file, null, null, 'DUPLICADO', detalleDup, []);
+    bitacora('DUPLICADO', file.getName(), detalleDup);
     moverA(file, revision);
     return;
   }
 
   if (!textoUtilizable(ext.texto)) {
-    encolar(file, null, null, 'SIN_TEXTO',
-      'No se pudo extraer texto legible' + (ext.error ? ': ' + ext.error : '. Puede ser un escaneo de baja calidad.'), []);
+    var detalleSinTexto = 'No se pudo extraer texto legible' + (ext.error ? ': ' + ext.error : '. Puede ser un escaneo de baja calidad.');
+    encolar(file, null, null, 'SIN_TEXTO', detalleSinTexto, []);
+    bitacora('SIN_TEXTO', file.getName(), detalleSinTexto);
     moverA(file, revision);
     return;
   }
@@ -75,7 +77,9 @@ function procesarUno(file, revision, indice) {
   });
 
   if (!v.ok) {
-    encolar(file, null, null, 'NO_CLASIFICADO', v.errores.join(' '), []);
+    var detalleNoClasif = v.errores.join(' ');
+    encolar(file, null, null, 'NO_CLASIFICADO', detalleNoClasif, []);
+    bitacora('NO_CLASIFICADO', file.getName(), detalleNoClasif);
     moverA(file, revision);
     return;
   }
@@ -114,6 +118,11 @@ function procesarUno(file, revision, indice) {
                'apruebe sin cambios.');
     estado = 'REVISAR';
     bitacora('CONFLICTO', file.getName(), k.codigo + ' — ' + k.motivo);
+  } else if (estado === 'REVISAR') {
+    /* CONFLICTO ya deja su propio rastro arriba; este cubre el resto de los
+       motivos de REVISAR (confianza baja, similitud de título, datos de
+       tercero incompletos) para que ninguno quede sin registrar. */
+    bitacora('REVISAR', file.getName(), notas.join(' | '));
   }
 
   encolar(file, c, { nombre: nombre, decision: decision }, estado, notas.join(' | '), similares);
@@ -205,7 +214,7 @@ function aplicarArchivado(fila, C, numFila, hoja) {
   }
 
   aplicarEtiqueta(objetivo.getId(), c);
-  if (decision.obsoletar.length) marcarObsoletos(decision.obsoletar);
+  if (decision.obsoletar.length) marcarObsoletos(decision.obsoletar, nombre);
 
   registrarEnIndice(c, decision, nombre, objetivo.getId(), carpeta.getName(),
                     Session.getActiveUser().getEmail());

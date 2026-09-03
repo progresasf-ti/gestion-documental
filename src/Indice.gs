@@ -283,8 +283,10 @@ function registrarEnIndice(c, decision, nombreArchivo, fileId, carpeta, aprobado
   }
 }
 
-/** Marca como OBSOLETO el registro de las versiones anteriores. */
-function marcarObsoletos(fileIds) {
+/** Marca como OBSOLETO el registro de las versiones anteriores.
+ *  @param {string} [reemplazadoPor] nombre del archivo que las reemplaza,
+ *         solo para que quede en BITACORA; no afecta la lógica. */
+function marcarObsoletos(fileIds, reemplazadoPor) {
   if (!fileIds || !fileIds.length) return 0;
 
   var hoja = SpreadsheetApp.openById(CONFIG.INDEX_SHEET_ID)
@@ -292,6 +294,7 @@ function marcarObsoletos(fileIds) {
   var datos = hoja.getDataRange().getValues();
   var colFile = datos[0].indexOf('FILE_ID');
   var colEst = datos[0].indexOf('ESTADO');
+  var colCod = datos[0].indexOf('CODIGO');
   var n = 0;
 
   for (var i = 1; i < datos.length; i++) {
@@ -302,6 +305,10 @@ function marcarObsoletos(fileIds) {
     //    perderse si Drive falla.
     hoja.getRange(i + 1, colEst + 1).setValue('OBSOLETO');
     n++;
+    /* Antes solo ERROR quedaba en BITACORA; el caso normal (éxito) no dejaba
+       rastro y solo era reconstruible mirando LISTADO_MAESTRO. */
+    bitacora('OBSOLETO', String(datos[i][colCod] || datos[i][colFile]),
+      reemplazadoPor ? 'Reemplazado por ' + reemplazadoPor + '.' : '');
 
     // 2) Mover y renombrar es best-effort: si falla, se registra y se sigue.
     try {
