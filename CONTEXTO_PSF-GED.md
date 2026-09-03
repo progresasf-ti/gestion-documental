@@ -2423,3 +2423,210 @@ abierto de los huecos de la bitácora.
 Un **tercero extranjero** con RUC largo sigue perdiendo la identificación y
 yendo a REVISAR. La propuesta está acotada a los propios. Va junto a la
 limitación de pasaportes.
+
+---
+
+# ANEXO 5 — Sesión del 3 de septiembre de 2026
+
+> Cierra el último bloqueante técnico (B1) y los huecos de trazabilidad de
+> BITACORA. Nada de esto está probado en campo todavía.
+
+---
+
+## 1. RESULTADO
+
+- **El RUC de PFI viene siempre en forma corta: `155709241`.** Dato del
+  usuario. Es exactamente el caso que el anexo anterior daba por bueno, así
+  que **B1 queda cerrado en código sin tocar una línea**.
+- **La forma larga del RUC se cierra como NO NECESARIA**, no como aplazada
+  (ver 3).
+- **Huecos de BITACORA cerrados en código**: se agregaron los eventos que
+  faltaban. Empujado a Apps Script y cotejado (9 de 9 idénticos).
+- **El sistema sigue `PAUSADO = true`**, pero ya no por el RUC: solo falta la
+  prueba de campo.
+
+---
+
+## 2. B1 — VERIFICADO EN LOCAL, SIN CAMBIOS DE CÓDIGO
+
+Se ejercitó el camino completo con el número real antes de declarar nada:
+
+| Caso | Resultado |
+|---|---|
+| `limpiarNIT('155709241')` | `155709241` — 9 dígitos, dentro del rango 7–10 |
+| `canonizarIdentificacion('RUC', …)` | sin tocar, e idempotente |
+| `NITS_PROPIOS['155709241']` | `PFI` ✓ |
+| Documento de PFI marcado como RUC | origen `PFI`, sin identificación en el nombre, sin revisión |
+| **Marcado mal como `NIT`** | canoniza a `1557092416` (DV inventado) **pero la guarda por forma cruda lo rescata**: sigue saliendo `PFI` |
+| Propuesto como tercero (`CLI`) | corregido a `PFI` con aviso explícito |
+| Nombre resultante | `RG-GF-001_V01_Estados-Financieros_20260903.pdf` |
+
+La guarda de la forma cruda —agregada el 2-sep "por si acaso"— es la que
+sostiene el caso del TIPO_ID equivocado. Sin ella, un error del modelo
+archivaría un documento propio de PFI como de tercero, con un DV inventado
+en el nombre.
+
+⚠️ **Falta la prueba de campo con un documento real de PFI.** Lo resuelto es
+la pregunta de DISEÑO (en qué forma viene el número), que era el bloqueante.
+Verificado en local no es verificado en ejecución.
+
+---
+
+## 3. LO QUE SE CIERRA SIN IMPLEMENTAR
+
+**3.1 La forma larga del RUC (anexo 4 cont., §17).** Todo el diseño de
+coincidencia por prefijo —las tres condiciones, el riesgo de chocar con
+`1557092416` y con cédulas de 10 dígitos, el ajuste de la regla 7— existía
+para un caso que no ocurre. Sale del backlog.
+
+**3.2 La idea derivada de registrar en BITACORA las identificaciones de más
+de 10 dígitos.** Su propósito era que *"el primer documento de PFI conteste la
+pregunta por sí solo"*. La pregunta ya está contestada.
+
+**3.3 La razón del `PAUSADO = true`.** El anexo anterior lo dejó así porque
+*"reanudar pondría a procesar documentos con un cambio cuya corrección todavía
+depende de la forma del RUC"*. Esa dependencia desapareció.
+
+Sigue abierto, sin cambios: un **tercero extranjero** con RUC largo pierde la
+identificación y va a REVISAR (junto a la limitación de pasaportes).
+
+---
+
+## 4. HUECOS DE BITACORA — CERRADOS EN CÓDIGO
+
+Pendiente abierto desde el Punto 7 del 28-ago: la bitácora solo registraba
+LOTE, ARCHIVADO, CONFLICTO, RECHAZADO y los errores. Los casos que requieren
+intervención humana no dejaban rastro, y las obsolescencias existían solo en
+LISTADO_MAESTRO.
+
+### `Motor.gs` — `procesarUno()`
+Cada salida temprana registra ahora su evento con el mismo detalle que se
+escribe en APROBACIONES: `DUPLICADO`, `SIN_TEXTO`, `NO_CLASIFICADO`.
+
+Para `REVISAR` se usó `else if` después del bloque de conflictos, no un `if`
+independiente: `CONFLICTO` ya deja su propio rastro y un documento no debe
+producir dos entradas por el mismo motivo. El evento `REVISAR` cubre el resto
+—confianza baja, similitud de título, datos de tercero incompletos—.
+
+### `Indice.gs` — `marcarObsoletos(fileIds, reemplazadoPor)`
+Antes solo registraba `ERROR` cuando fallaba el movimiento a `_OBSOLETOS`: el
+caso normal (éxito) no dejaba rastro. Ahora emite `OBSOLETO` con el CODIGO del
+documento obsoletado.
+
+El segundo parámetro es nuevo y **solo alimenta la bitácora**; `aplicarArchivado()`
+le pasa el `nombre` del archivo que reemplaza. Sin él, la correlación entre el
+obsoleto y su reemplazo dependía de la cercanía de los timestamps.
+
+### Lo que NO cubren las pruebas locales
+`procesarUno()` y `marcarObsoletos()` dependen de `SpreadsheetApp` y `DriveApp`;
+ninguna de las tres suites las toca (buscar `marcarObsoletos` o `bitacora(` en
+`test/` no devuelve nada). Las suites siguen en verde —133 / 68 / 20.000+5.000—
+pero **eso solo prueba que no se rompió la sintaxis ni las funciones puras**.
+Este cambio se verifica únicamente en ejecución.
+
+---
+
+## 5. AUDITORÍA DE LA LLAMADA A LA API (no se cambió nada)
+
+Se auditó `Clasificador.gs` contra las prácticas actuales de la API. Modelo
+objetivo: el que ya usa el código, `claude-haiku-4-5-20251001` (confirmado
+vigente, no es un ID obsoleto).
+
+**Lo que está bien y no se toca:** header `anthropic-version: 2023-06-01`
+(vigente), sin parámetros de muestreo fósiles, sin `budget_tokens`, sin
+cabeceras beta obsoletas, reintento con espera creciente para 429 y 5xx, y
+descripciones de parámetros detalladas (que es lo que más pesa en el desempeño
+de una herramienta). Las reglas del prompt tienen procedencia documentada
+contra este mismo modelo, así que su lenguaje enfático **se conserva**: son
+mitigaciones verificadas, no retórica heredada de modelos viejos.
+
+**Hallazgo único (no aplicado):** `tool_choice` forzado + el "Plan B" que
+reparsea texto + `extraerJSON()` son el patrón *JSON-via-forced-tool*, que hoy
+tiene un reemplazo dedicado: structured outputs (`output_config.format`), que
+Haiku 4.5 soporta. No es un error —en Haiku 4.5 el `tool_choice` forzado
+funciona; solo devuelve 400 en Fable 5.1— sino una modernización opcional. El
+diff está redactado y no se aplicó: cambia la forma de la respuesta de la API
+y exige prueba de campo.
+
+### Prompt caching: NO aplica en este modelo
+
+Se midió el prefijo estable real: prompt de sistema ~1.900–2.300 tokens
+(9.203 caracteres) + esquema de la herramienta ~650 = **~2.550–2.950 tokens**.
+**Haiku 4.5 exige un mínimo de 4.096 tokens para cachear**; por debajo no
+cachea y no avisa (`cache_creation_input_tokens: 0`). Estamos entre 1.150 y
+1.800 tokens cortos: demasiado para ser error de estimación.
+
+Segundo motivo, independiente: el ahorro solo aparece con dos o más llamadas
+dentro de la ventana de 5 minutos. Con `analizarBandeja()` cada 15 min y pocos
+documentos por ciclo, cada llamada sería una escritura sin lectura — el 1,25×
+del write premium, **más caro** que no cachear.
+
+Revisitar solo si el prompt supera los 4K tokens o si se migra a un modelo con
+mínimo más bajo (Opus 5 / Sonnet 5: 512–1024).
+
+---
+
+## 6. ESTADO DEL DESPLIEGUE
+
+| | |
+|---|---|
+| `pruebas.js` | 133 pasadas, 0 fallidas |
+| `prueba_origen.js` | 68 ok, 0 fallas |
+| `fuzz.js` | 20.000 + 5.000, 0 excepciones, 0 invariantes violados |
+| Cotejo `src/` ↔ editor | **9 de 9 idénticos**, 0 marcadores faltantes |
+| `PAUSADO` | **`true`** — el sistema sigue detenido |
+
+El push se hizo con la configuración desechable (`clasp-push.json` con
+`rootDir: "src"`), borrada inmediatamente después.
+
+---
+
+## 7. PENDIENTES ACTUALIZADOS
+
+**Prueba de campo (lo único que queda para cerrar dos frentes)**
+1. Reanudar (`PAUSADO = false`), `diagnostico()` y prueba de humo.
+2. Ejercitar los eventos nuevos de BITACORA: un escaneo ilegible (`SIN_TEXTO`),
+   una copia de un documento ya archivado (`DUPLICADO`), y una v2 de un
+   documento vigente (`OBSOLETO` + `ARCHIVADO`).
+3. Documento real de PFI (`RG-GF-…`, sin identificación en el nombre).
+
+**Cerrados en esta sesión**
+- ~~NIT/RUC real de PFI (B1)~~ → **CERRADO en código**, falta prueba de campo.
+- ~~Forma larga del RUC~~ → **CERRADO como no necesaria.**
+- ~~Huecos de BITACORA~~ → **CERRADOS en código**, falta prueba de campo.
+
+**Documentación**
+4. **B1 del checklist sigue mal redactado** ("NIT real de PFI… 10 dígitos
+   canónicos"). Reescribirlo en términos de RUC de 9 dígitos sin DV.
+
+**Deuda técnica: sin cambios** (pasaportes, `NOMBRE_ARCHIVO` al obsoletar,
+originales sin marcar, guarda `razonSocial` vs `titulo`, regla 10, refactor de
+`formatearAprobaciones()`), más uno nuevo:
+5. Structured outputs en vez de `tool_choice` forzado (§5). Opcional.
+
+**Decisiones abiertas que condicionan la instalación**
+A1 ubicación del archivo documental, A2 cuenta ejecutora, A3 acta, A4
+aprobadores, A5 retención y respaldo.
+
+---
+
+## 8. LECCIONES DE MÉTODO
+
+- **Un bloqueante puede cerrarse con un dato, sin escribir código.** B1 llevaba
+  semanas abierto; la respuesta fue una línea del usuario y la verificación de
+  que el código ya la manejaba. Antes de implementar, comprobar si el caso real
+  ya está cubierto.
+- **Aplazar a propósito salió barato.** El diseño de la forma larga (§17 del
+  anexo 4) se analizó pero no se implementó, a la espera del dato. El dato lo
+  volvió innecesario: se ahorró un cambio riesgoso que habría podido archivar
+  terceros colombianos como documentos propios de PFI.
+- **Una optimización puede no ser aplicable, y eso es un resultado.** El
+  caching parecía dinero sobre la mesa hasta que se midió el prefijo contra el
+  mínimo del modelo. Medir antes de proponer.
+- **La procedencia protege al prompt de una auditoría.** El lenguaje enfático
+  de las reglas se conservó porque cada una nació de un fallo documentado
+  contra este mismo modelo. Sin ese registro, una auditoría de "quitar cruft"
+  las habría podado.
+- **Un evento por documento, no uno por motivo.** El `else if` del `REVISAR`
+  frente al `CONFLICTO` es deliberado: dos entradas para el mismo documento
+  harían que contar eventos en BITACORA dejara de significar contar documentos.
