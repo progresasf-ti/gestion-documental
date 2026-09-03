@@ -2742,3 +2742,110 @@ manda el documento a REVISAR, no lo archiva mal.
   sin ejercitar y declarado como tal, en vez de forzar un esquema inválido para
   producir un check verde. Un verde fabricado vale menos que un pendiente
   honesto.
+
+---
+
+## 13. B1 CERRADO EN EJECUCIÓN, Y UNA DECISIÓN DE TAXONOMÍA QUE SE APLAZA AL PILOTO
+
+### 13.1 B1 — CERRADO
+
+Prueba de campo con un documento real de PFI:
+
+| Verificación | Resultado |
+|---|---|
+| Nombre | `LG-JR-001_V01_Contrato-Doble-Cesion-Sin-Responsabilidad_20260903.docx` — **sin identificación** |
+| Carpeta | `07_Juridica/LG_Documento_Legal_Societario/PROPIO` |
+| `ORIGEN` | `PFI` |
+| `TIPO_ID` y `NIT` | vacíos |
+
+El RUC se reconoció como propio, sin DV inventado y sin rastro de
+identificación en el nombre. **El último bloqueante técnico queda cerrado en
+ejecución.**
+
+De paso, cobertura: **LG queda ejercitado** por primera vez (estaba en la lista
+de tipos nunca probados junto a MC y MZ).
+
+### 13.2 Lo que el mismo documento destapó
+
+El documento es un **instrumento por operación** de factoring —confirmado por el
+usuario—, no un documento societario. Salió `LG-JR`.
+
+**Causa raíz: la regla 5 está incompleta.** Dice que los contratos de factoring
+van al **proceso OP** pero **nunca dice de qué TIPO son**. La regla 4 sí ofrece
+una respuesta completa (tipo LG *y* proceso JR) para cualquier "contrato
+redactado por PSF". Entre una regla que responde a medias y una que responde
+completo, el modelo toma la completa; la regla 10 solo lo confirma después.
+
+Es el defecto de la regla 6 en espejo, que el 1-sep quedó anotado como
+*"ambigüedad latente… misma familia de fallo, esperando turno"*. Se corrigió la
+6 y quedó la 5 con el hueco invertido.
+
+**Alcance:** la regla 5 enumera *endosos, pagarés, cartas de instrucción y
+contratos de factoring* — los instrumentos operativos centrales del negocio,
+probablemente la familia de mayor volumen.
+
+### 13.3 Cambio redactado y NO aplicado
+
+```
+Regla 5 (completar el tipo):
+  Endosos, pagarés, cartas de instrucción y contratos de cesión o doble cesión
+  son tipo RG, proceso OP: documentan una operación concreta. Esto aplica aunque
+  los redacte PSF y aunque tengan forma de contrato, con firmas y clausulado legal.
+
+Regla 4 (acotar "societario"):
+  Societario significa que trata sobre la estructura o el gobierno de la sociedad.
+  Los contratos de la OPERACIÓN de factoring (cesión, doble cesión, endoso, pagaré,
+  carta de instrucción) NO son societarios: van por la regla 5.
+```
+
+### 13.4 Hallazgo estructural asociado: el contrato marco
+
+Existe un **contrato marco de factoring**, suscrito entre el factor y el
+cedente, es decir **con NIT de tercero**. Si se clasificara `LG-OP`:
+
+```
+TIPOS_EXIGEN_TERCERO: ['RG', 'DE']     <- LG no esta
+```
+
+- Serie `LG-OP`: **una sola para todos los cedentes**
+- Código `LG-OP-001`: **sin el NIT**, numerado en secuencia corrida entre clientes
+- Carpeta: sí va a `…/{NIT}/` (usa `c.nit` directo)
+- Clave lógica: sí incluye el NIT → el versionamiento por cliente sí funcionaría
+
+Contradice el criterio de que cada tercero numera desde 001. El arreglo sería
+agregar `'LG'` a `TIPOS_EXIGEN_TERCERO`; el radio es acotado porque
+`esSerieDeTercero()` exige `!!c.nit`, así que los societarios propios (actas,
+estatutos, poderes) no se ven afectados. **No se aplicó.**
+
+### 13.5 DECISIÓN DEL USUARIO — se aplaza al piloto
+
+**Nada de 13.3 ni 13.4 se aplicó.** Decisión explícita del usuario (3-sep):
+
+> *"Yo no tengo todo ese detalle al 100%… veo el riesgo de no poder cerrar esta
+> versión para producción y creo que no puedo tomar todas las decisiones
+> respecto a la caracterización de los documentos."*
+
+Fundamento: estas son decisiones de **caracterización documental**, que
+pertenecen al SGC y no a quien instala el sistema. Es exactamente el punto que
+el acta del 31-ago dejó abierto (*"un cuerpo de reglas sin dueño designado es
+una no conformidad potencial por sí mismo"*), materializándose en un caso real.
+
+**Se dejan aflorar en el piloto**, con documentos reales y con quien pueda
+decidir. Riesgo asumido, con los ojos abiertos:
+
+- El **primer** documento de una clase no tiene red: se archiva donde el modelo
+  diga, sin aviso. Se corrige moviéndolo; no se pierde nada ni se rompe el índice.
+- El **segundo** sí la tiene: `casiColisiones()` detecta mismo tercero + mismo
+  título + distinto TIPO/PROCESO y fuerza `REVISAR`.
+
+⚠️ **Criterio de método que sale de aquí:** perseguir cada decisión de taxonomía
+a medida que aparece impide cerrar la versión. La regla pasa a ser: **el sistema
+se cierra cuando es técnicamente correcto; la caracterización documental se
+afina en el piloto, con su dueño.**
+
+### 13.6 Queda archivado como está
+
+`LG-JR-001_V01_Contrato-Doble-Cesion…` se deja donde quedó. Es un documento de
+prueba y moverlo ahora no aporta nada; si se decide la regla en el piloto, se
+limpia y se reprocesa (fila en LISTADO_MAESTRO, fila en APROBACIONES, el archivo,
+el original y la papelera de Drive por la huella MD5).
