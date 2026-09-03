@@ -2849,3 +2849,151 @@ afina en el piloto, con su dueño.**
 prueba y moverlo ahora no aporta nada; si se decide la regla en el piloto, se
 limpia y se reprocesa (fila en LISTADO_MAESTRO, fila en APROBACIONES, el archivo,
 el original y la papelera de Drive por la huella MD5).
+
+---
+
+# ANEXO 5 (cierre) — Instructivo, acta complementaria y decisiones A1–A5
+
+Cierre de la sesión del **3 de septiembre de 2026**. Todo lo de abajo es
+documental: **no se tocó una sola línea de `src/`** después de la prueba de
+campo de BITACORA.
+
+## 14. INSTRUCTIVO DE OPERACIÓN — base entregada
+
+`docs/INSTRUCTIVO_OPERACION.md` (377 líneas, commit `2e724e0`).
+
+Es una **base para pulir**, a petición explícita del usuario: él le agrega
+pantallazos y ajusta la forma. Lo que ya trae:
+
+- Todos los datos técnicos **verificados contra el código**, no recordados:
+  nombres de hojas, estados, umbral de confianza, tamaño de lote, cadencia de
+  los disparadores, retenciones por tipo.
+- Cinco marcas `📷 [Pantallazo: …]` donde hace falta imagen.
+- Campos en blanco para código de documento, versión y responsables — los llena
+  Calidad al codificarlo dentro del SGC.
+- Una sección de **"cosas que parecen errores y no lo son"**: el archivo que se
+  queda en `00_BANDEJA_ENTRADA` porque `CONSERVAR_ORIGINAL` está en `true`, el
+  documento que aparece dos veces con estados distintos, el `REVISAR` sin
+  motivo evidente.
+- **Anexo A para el administrador**, que incluye la regla que costó una sesión
+  entera aprenderla: **`clasp push` → recargar la pestaña del editor → recién
+  ahí tocar el editor** (ver §10 de este mismo anexo).
+
+Falta: pantallazos, codificación SGC y firma. Nada de eso es trabajo de código.
+
+## 15. ACTA COMPLEMENTARIA — redactada
+
+`docs/ACTA_COMPLEMENTARIA_REGLAS_CLASIFICACION.md` (276 líneas, commit `0305e94`).
+
+Complementa —no reemplaza— el acta del **31 de agosto de 2026**
+(`PSF-GED_Acta-Decision-Reglas-Clasificacion.pdf`, 3 páginas), que se leyó
+completa antes de redactar. Estructura:
+
+| Numeral | Contenido |
+|---|---|
+| 2 | Actualiza los tres puntos abiertos del acta original: **dos resueltos** (estados financieros de terceros; campo de origen), **uno sigue abierto** (desempate por número) |
+| 3 | Ratifica la DECISIÓN 1 (Estudio de Cupo → GR) **corrigiendo su primer fundamento**: el argumento de "quién aprueba" quedó desplazado por el criterio nuevo |
+| 4 | Registra las DECISIONES 3–8 tomadas después del 31-ago |
+| 6 | Tres puntos abiertos, con recomendación para cada uno |
+| 7 | **Gobierno**: la caracterización documental pertenece al SGC; la herramienta se cierra cuando es técnicamente correcta |
+| 8 | Le pone **fecha de vencimiento** al argumento "reprocesar es gratis": deja de serlo al arrancar el piloto |
+
+Las DECISIONES 3–8 registradas: el proceso es *del que trata* el documento;
+el origen es atributo del tercero, no del documento; contables y tributarios se
+parten por titular; la titulación debe ser estable; ubicación de MC/PL/CA; y
+PFI se identifica con RUC.
+
+**Estado:** el usuario la convierte a PDF. Faltan responsable, cargo y firma.
+
+## 16. DECISIONES A1–A5 — dónde quedó cada una
+
+| | Tema | Estado al cierre |
+|---|---|---|
+| **A1** | Ubicación (Mi unidad vs. unidad compartida) | Recomendación dada — **falta verificarla técnicamente** |
+| **A2** | Cuenta ejecutora | Recomendación dada (cuenta de servicio) + hallazgo de trazabilidad |
+| **A3** | Acta | ✅ Redactada — pendiente conversión y firma |
+| **A4** | Aprobadores | Opciones planteadas — decide Calidad |
+| **A5** | Retención y respaldo | Opciones planteadas — decide Calidad + jurídico |
+
+### 16.1 A1 — tres dependencias técnicas reales, verificadas en el código
+
+Mover el sistema a una unidad compartida **no es solo mover carpetas**. Hay tres
+puntos en el código que dependen de dónde viva:
+
+```
+src/Instalador.gs:9    DriveApp.getRootFolder()      <- "Mi unidad" del ejecutor
+src/Instalador.gs:58   p.next().removeFile(f)        \  patrón heredado
+src/Instalador.gs:59   raiz.addFile(f)               /  de mover archivos
+src/Motor.gs:243       padres.next().removeFile(file) \
+src/Motor.gs:244       carpeta.addFile(file)          /  ídem, en moverA()
+```
+
+`getRootFolder()` ancla la instalación en la unidad personal de quien ejecuta
+`instalarSistema()`. Y el par `removeFile`/`addFile` es la API vieja de padres
+múltiples: **en unidades compartidas suele fallar**, porque ahí un archivo tiene
+un solo padre. No está probado — es una hipótesis fundada, no un hecho.
+`moverA()` es el corazón del sistema: si eso se rompe, se rompe todo.
+
+**Por eso A1 no se puede agendar hasta probarlo.** El arreglo, si se confirma,
+es cambiar a `file.moveTo(carpeta)`, que sí funciona en ambos casos.
+
+### 16.2 A2 — el hueco de `APROBADO_POR`
+
+```
+src/Motor.gs:220    Session.getActiveUser().getEmail()
+```
+
+Eso registra **la cuenta que ejecuta el disparador**, no la persona que escribió
+`APROBADO` en `SU_DECISION`. Si el sistema corre bajo una cuenta de servicio
+—que es justamente la recomendación de A2— entonces **todas las aprobaciones
+quedarían firmadas por la cuenta de servicio**, y la trazabilidad de quién
+aprobó qué se pierde.
+
+No es un defecto nuevo: es lo que la decisión A2 destapa. Se arregla con un
+disparador `onEdit` que capture el correo real en el momento en que la persona
+escribe la decisión en la hoja. Cambio pequeño y aislado.
+
+**A2 y el hueco de `APROBADO_POR` hay que decidirlos juntos.** Es el punto de
+la ISO 9001 7.5.3.2 sobre control de cambios: si nadie queda registrado como
+aprobador, el control existe en el procedimiento pero no en la evidencia.
+
+### 16.3 A4 y A5 — no dependen de código
+
+- **A4**: la protección práctica es permisos de la hoja + rango protegido sobre
+  la columna `SU_DECISION`. Quién puede aprobar lo define Calidad.
+- **A5**: las retenciones ya salen de la taxonomía (LG 99 años, RG 10 años).
+  Lo que falta es la política de respaldo y **fijar una fecha para apagar
+  `CONSERVAR_ORIGINAL`** — hoy en `true`, que es lo correcto para arrancar,
+  pero duplica cada documento mientras siga así.
+
+## 17. DÓNDE ARRANCA LA PRÓXIMA SESIÓN
+
+Propuesta aceptada por el usuario al cerrar: **la parte técnica de A1 y A2**.
+Son dos cambios pequeños y aislados, uno a la vez, cada uno con su prueba:
+
+1. **`moverA()` compatible con unidades compartidas.** Reemplazar el par
+   `removeFile`/`addFile` por `moveTo()` en `src/Motor.gs:243-244` y en
+   `src/Instalador.gs:58-59`. Probar en una unidad compartida real antes de
+   dar A1 por decidible.
+2. **`onEdit` que registre al aprobador real**, para cerrar el hueco de
+   `APROBADO_POR` de §16.2.
+
+Orden sugerido: primero (1), porque A1 está bloqueada esperando ese dato;
+(2) puede ir después sin que nada dependa de él.
+
+## 18. ESTADO DEL REPOSITORIO AL CIERRE
+
+```
+0305e94  Acta complementaria de decision            <- sin empujar
+2e724e0  Instructivo de operacion: base para pulir  <- sin empujar
+c713a2f  B1 cerrado en ejecucion; caracterizacion   <- sin empujar
+563801c  Prueba de campo de BITACORA                <- origin/main
+```
+
+**Tres commits locales por delante de `origin/main`.** Los tres son
+documentación, sin código, así que no tienen prueba de campo que esperar; aun
+así **no se empujaron**, porque la regla del usuario es que el push lo autoriza
+él. Se le preguntó y quedó sin responder al cerrar la sesión.
+
+`src/` está limpio y **sincronizado con Apps Script** (cotejo 9/9 al momento de
+la prueba de campo). `PAUSADO = false`, `CONSERVAR_ORIGINAL = true`.
