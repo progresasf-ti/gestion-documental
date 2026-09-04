@@ -6,7 +6,7 @@
  **********************************************************************/
 
 function instalarSistema() {
-  var raiz = obtenerOCrear(DriveApp.getRootFolder(), 'PSF GED - Gestion Documental ISO 9001');
+  var raiz = obtenerOCrear(carpetaBase(), 'PSF GED - Gestion Documental ISO 9001');
   guardarConfig('RAIZ_ID', raiz.getId());
 
   var mapa = {
@@ -39,6 +39,30 @@ function instalarSistema() {
   Logger.log(msg);
   try { MailApp.sendEmail(CONFIG.ALERT_EMAIL, '[PSF GED] Sistema instalado', msg); } catch (e) {}
   return msg;
+}
+
+/**
+ * Dónde se planta el árbol. Sin CONFIG.CARPETA_INSTALACION, Mi unidad de quien
+ * ejecuta — que es lo que hacía el sistema antes de septiembre de 2026. Con
+ * ella, esa carpeta, que puede vivir en una unidad compartida.
+ *
+ * Si el ID está pero no sirve, ESTO REVIENTA a propósito. Caer de vuelta a Mi
+ * unidad sería peor que fallar: la instalación se vería correcta —carpetas
+ * creadas, hoja creada, correo enviado— y el archivo documental quedaría como
+ * propiedad personal de un empleado. Ese es exactamente el riesgo que la
+ * decisión A1 existe para eliminar, y llegaría disfrazado de éxito.
+ */
+function carpetaBase() {
+  var id = String(CONFIG.CARPETA_INSTALACION || '').trim();
+  if (!id) return DriveApp.getRootFolder();
+  try {
+    return DriveApp.getFolderById(id);
+  } catch (e) {
+    throw new Error(
+      'CARPETA_INSTALACION no es una carpeta accesible: "' + id + '". Revise que el ' +
+      'ID sea el que aparece en la URL de la carpeta (.../folders/ESTO_ES_EL_ID) y ' +
+      'que la cuenta que instala tenga acceso a ella. Detalle: ' + (e.message || e));
+  }
 }
 
 function obtenerOCrear(padre, nombre) {

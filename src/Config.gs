@@ -9,6 +9,23 @@
 const PAUSADO = false;
 
 const CONFIG = {
+  /* ---------- LO ÚNICO QUE SE LLENA A MANO ANTES DE INSTALAR ----------
+     Dónde se planta el árbol de carpetas.
+
+       vacío  = Mi unidad de quien ejecute instalarSistema()
+       con ID = esa carpeta, que puede estar en una unidad compartida
+
+     El ID sale de la URL de la carpeta:  .../folders/ESTO_ES_EL_ID
+     La raíz de una unidad compartida sirve como carpeta.
+
+     ⚠️ Dejarlo vacío deja el archivo documental como propiedad personal de
+     un empleado: si su cuenta se suspende, el archivo se va con ella. Es
+     justo el riesgo que la decisión A1 existe para eliminar.
+
+     Sólo se lee al instalar. Después manda RAIZ_ID, y cambiar esto NO mueve
+     una instalación que ya existe: crearía un árbol nuevo y vacío. */
+  CARPETA_INSTALACION : '',
+
   /* Se llenan automáticamente al ejecutar instalarSistema(). */
   RAIZ_ID          : '',   // carpeta raíz "PSF GED"
   INBOX_ID         : '',   // 00_BANDEJA_ENTRADA
