@@ -206,11 +206,66 @@ y seguir.
 
 ---
 
+# Anexo — Agregar un segundo aprobador
+
+No es parte de la instalación del lunes. Queda escrito para cuando se defina la
+persona, y para que no haya que redescubrirlo.
+
+**El código no tiene ninguna noción de "quién puede aprobar".**
+`ejecutarDecisiones()` lee `SU_DECISION` y ejecuta lo que encuentre, sin
+preguntar quién lo escribió. **El control vive enteramente en los permisos de la
+hoja de Google.** Agregar a alguien es un cambio de permisos, no de programa.
+
+Y `registrarDecisor()` captura **a quien sea que edite** — no conoce a Diego. Un
+segundo aprobador queda registrado correctamente en `DECIDIDO_POR` y en
+`APROBADO_POR` desde el primer día, sin tocar una línea.
+
+- [ ] **1. Permisos de la hoja.** Dar edición al segundo aprobador y ampliar el
+      rango protegido de `SU_DECISION` para incluirlo. Es el paso real.
+- [ ] **2. `ALERT_EMAIL`.** Acepta varios destinatarios separados por coma
+      (`Instalador.gs:40` y `Motor.gs:419` lo admiten):
+
+```js
+ALERT_EMAIL : 'diego@progresasf.com,suplente@progresasf.com',
+```
+
+      **Mejor: un grupo de Google** (`aprobadores@progresasf.com`), y así entran
+      y salen personas sin volver a tocar el código nunca.
+- [ ] **3. El saludo del correo diario.** `Motor.gs:422` dice literalmente
+      `'<p>Buenos días, Diego.</p>'`. Con dos destinatarios queda mal. Cambio
+      trivial, fácil de olvidar.
+- [ ] **4. Probar la concurrencia** (E4 del checklist): dos personas aprobando
+      filas distintas en el mismo minuto, y verificar que no salgan dos
+      documentos con el mismo consecutivo.
+
+### ⚠️ "Suplente" y "coaprobador" son la misma cosa para el sistema
+
+Si los dos tienen permiso de edición, los dos pueden aprobar **siempre**. El
+código no puede saber que Diego está de viaje. Suplencia de verdad significa
+**dar y quitar el permiso** cuando se ausenta: procedimiento manual, y hay que
+escribirlo en el instructivo o no va a ocurrir.
+
+**Recomendación: coaprobación permanente, no suplencia condicionada.** Es más
+simple, no depende de que alguien mueva permisos a tiempo, y la trazabilidad
+queda igual de limpia porque `DECIDIDO_POR` registra quién firmó cada documento.
+Ante una auditoría, *"cualquiera de estos dos puede aprobar, y aquí está quién
+aprobó cada uno"* es una respuesta válida.
+
+**Sobre la concurrencia:** `ejecutarDecisiones()` corre desde un solo disparador
+de tiempo, así que recorre las filas en serie aunque dos personas hayan aprobado
+en el mismo minuto — dos personas editando la hoja no crean dos ejecuciones, y
+el `LockService` de `registrarEnIndice()` es cinturón, no el único freno. Pero
+eso es una **lectura del código, no una medición**, y el 4-sep una lectura
+razonable ya resultó falsa una vez.
+
+---
+
 # Pendientes que NO bloquean el arranque
 
 - **Suplente de Diego.** Con aprobador único, si no está, el flujo se detiene:
   los documentos se acumulan en `01_EN_REVISION` sin perderse, pero nada se
-  archiva.
+  archiva. **Procedimiento listo en el anexo de arriba** — son permisos, no
+  código.
 - **Respaldo del `LISTADO_MAESTRO`.** Es la fuente única de verdad. Si se pierde
   o se corrompe, se pierde la trazabilidad aunque los archivos sigan en Drive.
   **Es el único punto donde una pérdida sería irreversible**, y no tiene

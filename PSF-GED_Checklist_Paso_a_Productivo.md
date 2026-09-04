@@ -134,6 +134,42 @@ Todo el control del sistema depende de que una persona escriba `APROBADO`.
       flujo se detiene: los documentos se acumulan en `01_EN_REVISION` sin
       perderse, pero nada se archiva. No bloquea el arranque; sí hay que
       resolverlo antes de que el sistema tenga volumen.
+
+#### Cómo se agrega un segundo aprobador — procedimiento listo
+
+**El código no tiene ninguna noción de "quién puede aprobar".**
+`ejecutarDecisiones()` lee `SU_DECISION` y ejecuta lo que encuentre, sin
+preguntar quién lo escribió. **El control vive enteramente en los permisos de la
+hoja**, no en el sistema. Agregar a alguien es un cambio de permisos, no de
+programa.
+
+Y `registrarDecisor()` (4-sep) captura **a quien sea que edite** — no conoce a
+Diego. Un segundo aprobador queda registrado correctamente en `DECIDIDO_POR` y
+en `APROBADO_POR` desde el primer día, sin tocar una línea.
+
+- [ ] **1. Permisos de la hoja.** Dar edición al segundo aprobador y ampliar el
+      rango protegido de `SU_DECISION` para incluirlo. Es el paso real.
+- [ ] **2. `ALERT_EMAIL`.** Acepta varios destinatarios separados por coma; se
+      usa en `Instalador.gs:40` y `Motor.gs:419` y ambos lo admiten:
+      `ALERT_EMAIL : 'diego@progresasf.com,suplente@progresasf.com'`.
+      **Mejor: un grupo de Google** (`aprobadores@progresasf.com`), y así entran
+      y salen personas sin volver a tocar el código nunca.
+- [ ] **3. El saludo del correo diario.** `Motor.gs:422` dice literalmente
+      `'<p>Buenos días, Diego.</p>'`. Con dos destinatarios queda mal. Cambio
+      trivial, fácil de olvidar.
+- [ ] **4. Probar E4** (ver FASE E).
+
+⚠️ **"Suplente" y "coaprobador" son la misma cosa para el sistema.** Si los dos
+tienen permiso de edición, los dos pueden aprobar siempre — el código no puede
+saber que Diego está de viaje. Suplencia de verdad significa **dar y quitar el
+permiso** cuando se ausenta: procedimiento manual, y hay que escribirlo en el
+instructivo o no va a ocurrir.
+
+**Recomendación: coaprobación permanente, no suplencia condicionada.** Es más
+simple, no depende de que alguien mueva permisos a tiempo, y la trazabilidad
+queda igual de limpia porque `DECIDIDO_POR` registra quién firmó cada documento.
+Ante una auditoría, *"cualquiera de estos dos puede aprobar, y aquí está quién
+aprobó cada uno"* es una respuesta válida.
 - [ ] Definir permisos: quién edita la hoja `APROBACIONES`, quién solo la ve,
       quién puede tocar `02_ARCHIVO_CONTROLADO`.
 - [ ] ⚠️ **Nunca se ha probado con más de un aprobador.** Ver E4.
@@ -418,9 +454,20 @@ Duración sugerida: **2 a 3 semanas**, con `CONSERVAR_ORIGINAL = true`.
       en `REVISAR` y por qué, y **casos donde el modelo acertó con confianza baja
       o falló con confianza alta** (este segundo es el peligroso).
 - [ ] **E4.** ⚠️ Probar con **dos o más aprobadores simultáneos**. Nunca se ha
-      hecho. Riesgo concreto: dos ejecuciones pidiendo el mismo consecutivo.
+      hecho. Riesgo anotado: dos ejecuciones pidiendo el mismo consecutivo.
       Hay `LockService` en `registrarEnIndice()`, pero no se ha probado bajo
       concurrencia real.
+
+      **Relectura del código (4-sep), que baja el riesgo pero no lo cierra:**
+      `ejecutarDecisiones()` corre desde **un solo disparador de tiempo**, así
+      que recorre las filas en serie aunque dos personas hayan aprobado en el
+      mismo minuto. Dos personas editando la hoja **no** crean dos ejecuciones.
+      El `LockService` es cinturón, no el único freno.
+
+      ⚠️ Eso es una **lectura del código, no una medición** — y el 4-sep una
+      lectura razonable ya resultó falsa una vez. **Prueba concreta:** dos
+      personas aprobando filas distintas en el mismo minuto, y verificar que no
+      salgan dos documentos con el mismo consecutivo.
 - [ ] **E5.** Probar volumen: más de `MAX_LOTE` archivos de golpe, y verificar
       que no se agote el tiempo de ejecución de Apps Script.
 - [ ] **E6.** Revisar semanalmente la `BITACORA` buscando `ERROR` y
