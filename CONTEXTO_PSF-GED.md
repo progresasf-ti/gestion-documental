@@ -3299,3 +3299,168 @@ cotejo.** Se dejó así porque el push exige que la pestaña del editor esté ce
 y la pregunta quedó sin responder.
 
 `PAUSADO = false`, `CONSERVAR_ORIGINAL = true`, `CARPETA_INSTALACION` vacío.
+
+---
+
+# ANEXO 6 (continuación) — El ensayo en unidad compartida
+
+> Se hizo la instalación de prueba completa. **A1 y A2 quedan verificados en
+> ejecución.** Es la primera vez que el sistema corre fuera de Mi unidad.
+
+---
+
+## 12. LO QUE SE DESBLOQUEÓ
+
+`clasp` estaba autenticado como la cuenta personal y el proyecto de ensayo es de
+la corporativa. Se resolvió con credenciales nombradas:
+
+```
+clasp login --user progresasf     # tecnologia@progresasf.com
+clasp push -P <config> -u progresasf
+```
+
+Las dos credenciales conviven: la de por defecto sigue siendo
+`angel.castano@gmail.com`, que es la que empuja a producción. No hubo que
+desloguear nada.
+
+Apareció un segundo bloqueo, también de cuenta y no de código:
+
+```
+User has not enabled the Apps Script API.
+```
+
+Es un interruptor **por cuenta**, en `script.google.com/home/usersettings`. La
+personal lo tenía encendido y la corporativa no. Se activó y el push pasó.
+
+⚠️ **Se regeneró la copia del ensayo antes de empujarla.** La primera versión se
+había armado *antes* del cambio de A2, así que llevaba `carpetaBase()` pero no
+`registrarDecisor()` ni `DECIDIDO_POR`. Empujarla habría hecho imposible
+verificar justo el punto que menos evidencia tenía. Se detectó al releer qué
+contenía la copia, no por una prueba.
+
+---
+
+## 13. COTEJO DEL ENSAYO — LA HERRAMIENTA, OTRA VEZ
+
+El usuario cambió `PAUSADO` en el editor del ensayo y sospechó haber
+sobrescrito el push. `tools/cotejo.js` está cableado a producción, así que se
+hizo el mismo cotejo a mano contra el proyecto de ensayo:
+
+```
+Identicos: 8   Difieren: 1   Ausentes: 0
+
+Config.gs linea 9
+  local  | const PAUSADO = true;
+  editor | const PAUSADO = false;
+```
+
+**La única diferencia era la línea que cambió a propósito.** El push sobrevivió
+intacto.
+
+Y confirma algo más: la pestaña del ensayo **no** estaba rancia. Si lo hubiera
+estado, el guardado habría revertido el proyecto entero al `Código.gs` vacío de
+un proyecto recién creado — se habrían perdido los nueve archivos, no una línea.
+La regla de §10 del anexo 5 se sostiene, y ahora también en sentido inverso: el
+cotejo sirve para *descartar* la deriva, no sólo para encontrarla.
+
+La copia bajada se borró enseguida, por la misma razón que `cotejo/` se deja
+vacía.
+
+---
+
+## 14. RESULTADO DE LA PRUEBA EN UNIDAD COMPARTIDA
+
+### 14.1 Instalación
+
+| Verificación | Resultado |
+|---|---|
+| Árbol completo (5 carpetas + subcarpetas por proceso) | ✓ **en la unidad compartida** |
+| `FT-GC-001 Listado Maestro de Documentos` | ✓ **en la unidad compartida** |
+| `diagnostico()` | ✓ **las 8 líneas** |
+| Disparadores | ✓ **4 de 4** |
+| Servicio avanzado de Drive | ✓ activado solo, por el manifiesto |
+
+`carpetaBase()` funciona: **primera vez que `instalarSistema()` corre fuera de
+Mi unidad.** Y el traslado de `FT-GC-001` era el salto más frágil del sistema
+—nace en Mi unidad por `SpreadsheetApp.create()` y se mueve después— que nunca
+se había intentado contra una unidad compartida.
+
+### 14.2 Flujo completo
+
+| Paso | Resultado |
+|---|---|
+| Documento en `00_BANDEJA_ENTRADA` → `analizarBandeja()` | ✓ salió de la bandeja, quedó en `01_EN_REVISION` |
+| `APROBADO` en `SU_DECISION` | ✓ `DECIDIDO_POR` = `tecnologia@progresasf.com`, **al instante** |
+| `ejecutarDecisiones()` | ✓ copia en `02_ARCHIVO_CONTROLADO/…`, original en `99_ORIGINALES` |
+| `LISTADO_MAESTRO` | ✓ `APROBADO_POR` con el correo real, no `(sin identificar; …)` |
+
+**Todos esos son movimientos DENTRO de la unidad compartida** — el caso que la
+sonda 1 midió lanzando `Cannot use this operation on a shared drive item.` Con
+el código viejo el sistema no habría dado un paso.
+
+### 14.3 A2 — `e.user` sí entrega la identidad
+
+Era **el único punto de toda la sesión sin ninguna evidencia previa**. Google
+sólo entrega el correo del editor dentro del dominio del dueño del script, y no
+había forma de saberlo sin probarlo en un dominio real.
+
+Lo entrega. La firma que queda en el `LISTADO_MAESTRO` es la de la persona que
+escribió `APROBADO`, no la del disparador. **La evidencia del numeral 7.5.3.2
+existe ahora en el registro y no sólo en el procedimiento.**
+
+---
+
+## 15. ESTADO DE A1 Y A2
+
+| | Antes de hoy | Ahora |
+|---|---|---|
+| **A1** | Bloqueada: no se sabía si el código sobrevivía a una unidad compartida | 🟢 **Sin bloqueante técnico.** Queda elegir la unidad compartida definitiva y su administrador — decisión de gobierno, no incógnita de código |
+| **A2** | Recomendación, con un hueco de trazabilidad abierto | 🟢 **Hueco cerrado y verificado.** Queda definir la cuenta ejecutora, documentar quién la tiene y el procedimiento si cambia |
+
+Ninguna de las dos está *cerrada*: las dos esperan una decisión que no es
+técnica. Pero ya no hay nada que medir.
+
+---
+
+## 16. PENDIENTES
+
+**Limpieza inmediata**
+1. ⚠️ **El proyecto de ensayo quedó vivo**, con `PAUSADO = false` y cuatro
+   disparadores corriendo cada 15 minutos, más el resumen diario de las 7:00 a
+   `tecnologia@progresasf.com`. Borrar los disparadores o el proyecto entero.
+2. Borrar el árbol de prueba de la unidad compartida desechable.
+
+**Decisiones que ya sólo dependen de personas**
+3. A1: elegir la unidad compartida definitiva y su administrador.
+4. A2: definir la cuenta ejecutora. **No puede ser `angel.castano@gmail.com`**
+   (ver §6.1).
+5. A4 aprobadores, A5 retención y respaldo.
+
+**Documentación**
+6. Acta complementaria a PDF, con responsable, cargo y firma.
+7. Instructivo: pantallazos, codificación SGC y firma.
+
+**Deuda técnica: sin cambios**, más la regla 5 incompleta, aplazada al piloto.
+
+**Cuando llegue la instalación definitiva:** es limpia, no se migra nada del
+banco de pruebas. `CARPETA_INSTALACION` con el ID de la carpeta definitiva,
+`ALERT_EMAIL` de vuelta al buzón real, y `PAUSADO = true` hasta que
+`diagnostico()` esté en ✓.
+
+---
+
+## 17. LECCIÓN DE MÉTODO
+
+- **Una copia preparada envejece.** La del ensayo se armó antes del cambio de
+  A2 y habría empujado un sistema sin `registrarDecisor()`, dejando sin
+  verificar justo el punto que menos evidencia tenía. Antes de empujar algo que
+  se preparó hace rato, comprobar qué contiene.
+- **El cotejo también sirve para descartar.** Se corrió por una sospecha —"creo
+  que sobrescribí algo"— y el resultado fue que no había pasado nada. Una
+  herramienta de verificación que sólo se usa cuando se teme lo peor se usa la
+  mitad de las veces que debería.
+- **Un bloqueo de permisos no siempre es de permisos.** El primer error dijo
+  "The caller does not have permission" y era la cuenta equivocada; el segundo
+  dijo que faltaba habilitar la API y era un interruptor por cuenta. Ninguno de
+  los dos tenía que ver con el código, y perseguirlos en el código habría sido
+  gratis de empezar y caro de abandonar.

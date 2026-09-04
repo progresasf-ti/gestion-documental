@@ -60,12 +60,21 @@ allá. Ya está corregido: `moverA()` usa `moveTo()` (commit `0dc10a1`).
 - [x] **Hecho 4-sep-2026.** `moverA()` y el traslado de la hoja usan `moveTo()`,
       que sirve en los dos mundos. Verificado en ejecución sobre la instalación
       actual. Commit `0dc10a1`.
-- [ ] ⚠️ **Instalación de prueba completa en una unidad compartida desechable**,
-      antes de cargar documentos reales. Es lo único que falta para que A1 se
-      decida con datos. Bloqueada el 4-sep esperando credenciales de la cuenta
-      corporativa.
-- [ ] Verificar en esa prueba que `FT-GC-001` quede **en la unidad compartida**:
-      nace en Mi unidad por `SpreadsheetApp.create()` y se mueve después.
+- [x] ✅ **Instalación de prueba completa en unidad compartida — HECHA
+      4-sep-2026.** Proyecto de ensayo aparte, unidad compartida desechable,
+      cuenta corporativa. `diagnostico()` en ✓ las 8 líneas, incluido
+      "Disparadores: 4 de 4". Primera vez que `instalarSistema()` corre fuera de
+      Mi unidad.
+- [x] ✅ **`FT-GC-001` quedó en la unidad compartida.** Nace en Mi unidad y
+      `moveTo()` lo lleva. Era el salto más frágil y nunca se había intentado.
+- [x] ✅ **Flujo completo ejercitado allá**: bandeja → `01_EN_REVISION` →
+      `APROBADO` → copia en `02_ARCHIVO_CONTROLADO` y original en
+      `99_ORIGINALES`. **Son movimientos dentro de la unidad compartida — el
+      caso que con la API vieja lanzaba excepción.**
+
+🟢 **A1 ya no tiene bloqueante técnico.** Lo que queda es una decisión de
+gobierno, no una incógnita de código: elegir la unidad compartida definitiva y
+su administrador.
 
 ### A2. 🔴 Con qué cuenta se instala
 
@@ -85,9 +94,11 @@ decisión y lo deja en `DECIDIDO_POR` (columna 21 de `APROBACIONES`). Si Google
 oculta la identidad del editor no se inventa nada: el índice queda con
 `(sin identificar; ejecutó <cuenta>)`. Una firma falsa es peor que una ausente.
 
-- [ ] **Verificar en la instalación de ensayo que `e.user` sí entrega el correo**
-      dentro del dominio `progresasf.com`. Google sólo lo entrega en el mismo
-      dominio del dueño del script. Es lo primero que hay que mirar allá.
+- [x] ✅ **VERIFICADO EN EJECUCIÓN 4-sep-2026.** En el ensayo, al escribir
+      `APROBADO` la celda `DECIDIDO_POR` quedó con `tecnologia@progresasf.com`
+      de inmediato, y el `LISTADO_MAESTRO` registró ese correo en
+      `APROBADO_POR`. Google **sí** entrega la identidad del editor dentro del
+      dominio. Era el único punto de la sesión sin evidencia previa.
 - [ ] Definir la cuenta ejecutora. Recomendado: cuenta de servicio o genérica
       del área de calidad, no la cuenta personal de una persona.
 - [ ] Documentar quién tiene acceso a esa cuenta.
