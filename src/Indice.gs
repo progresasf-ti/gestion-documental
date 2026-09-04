@@ -332,6 +332,139 @@ function marcarObsoletos(fileIds, reemplazadoPor) {
   return n;
 }
 
+/* ================= RESPALDO DEL ÍNDICE ============================ *
+ * El LISTADO_MAESTRO es la fuente única de verdad. Buena parte se podría
+ * reconstruir recorriendo 02_ARCHIVO_CONTROLADO —el nombre de cada archivo
+ * ya codifica código, versión, título y fecha—, pero cuatro campos no:
+ * APROBADO_POR, FECHA_APROBACION, HUELLA y JUSTIFICACION. Los dos primeros
+ * son la evidencia del numeral 7.5.3.2. Este respaldo existe sobre todo
+ * para proteger las firmas.
+ * ================================================================= */
+
+/**
+ * Respaldo semanal del índice a CSV fechado, con verificación de integridad.
+ *
+ * ⚠️ NO lleva la guarda `if (PAUSADO) return;` que sí tienen los demás
+ * disparadores, y es a propósito. PAUSADO existe para que el sistema deje de
+ * ACTUAR sobre documentos durante un mantenimiento; este respaldo no toca
+ * ningún documento, sólo lee. Un mantenimiento largo que apagara los
+ * respaldos en silencio sería exactamente el fallo que esto viene a evitar.
+ */
+function respaldarIndice() {
+  cargarConfig();
+  if (!CONFIG.RESPALDOS_ID || !CONFIG.INDEX_SHEET_ID) return;
+
+  var hoja = SpreadsheetApp.openById(CONFIG.INDEX_SHEET_ID)
+                           .getSheetByName(CONFIG.INDEX_SHEET_NAME);
+  var datos = hoja.getDataRange().getValues();
+  if (datos.length < 2) return;   // sólo la cabecera: todavía no hay nada
+
+  var problemas = verificarIndice(datos);
+
+  /* El respaldo se escribe SIEMPRE, incluso si la verificación falló. Si el
+     índice está corrupto también queremos la foto del estado corrupto: los
+     respaldos anteriores siguen intactos, y comparar dos CSV consecutivos es
+     lo que permite ver qué se rompió y cuándo. */
+  var ahora = new Date();
+  var sello = Utilities.formatDate(ahora, CONFIG.TIMEZONE, 'yyyy-MM-dd');
+  var nombre = 'LISTADO_MAESTRO_' + sello + '.csv';
+
+  /* El BOM de UTF-8 va delante a propósito: sin él, Excel abre el CSV en la
+     codificación del sistema y parte todas las tildes y las eñes. */
+  var BOM = String.fromCharCode(0xFEFF);
+  var blob = Utilities.newBlob('', 'text/csv', nombre)
+                      .setDataFromString(BOM + aCSV(datos), 'UTF-8');
+  DriveApp.getFolderById(CONFIG.RESPALDOS_ID).createFile(blob);
+
+  var filas = datos.length - 1;
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('INDICE_FILAS', String(filas));
+  props.setProperty('ULTIMO_RESPALDO',
+    Utilities.formatDate(ahora, CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm'));
+
+  bitacora('RESPALDO', nombre, filas + ' registro(s).' +
+    (problemas.length ? ' CON PROBLEMAS DE INTEGRIDAD.' : ''));
+
+  if (problemas.length) {
+    bitacora('ERROR', 'Integridad del indice', problemas.join(' | '));
+    var salto = String.fromCharCode(10);
+    var cuerpo = 'La verificación del LISTADO_MAESTRO encontró esto:' + salto + salto +
+      '  · ' + problemas.join(salto + '  · ') + salto + salto +
+      'El respaldo se guardó igual, como ' + nombre + ', en 97_RESPALDOS.' + salto +
+      'Compare ese archivo con el respaldo anterior para ver qué cambió.' + salto + salto +
+      'https://docs.google.com/spreadsheets/d/' + CONFIG.INDEX_SHEET_ID;
+    try {
+      MailApp.sendEmail(CONFIG.ALERT_EMAIL,
+        '[PSF GED] El índice perdió integridad', cuerpo);
+    } catch (e) {}
+  }
+  return nombre;
+}
+
+/**
+ * Comprobaciones de integridad sobre el índice completo.
+ *
+ * Son dos, y las dos cubren el mismo desastre realista: que alguien edite la
+ * hoja a mano. Borrar filas es lo peor que puede pasar —los consecutivos se
+ * reutilizan y dos documentos distintos terminan con el mismo código— y es
+ * silencioso.
+ *
+ * ⚠️ La unicidad es de CODIGO + VERSION, NO de CODIGO. Una versión nueva
+ * reutiliza el consecutivo del documento original a propósito (ver
+ * resolverConsecutivoYVersion), así que comprobar sólo CODIGO dispararía una
+ * falsa alarma en cada v2. Una alarma que miente enseña a ignorarla.
+ */
+function verificarIndice(datos) {
+  var problemas = [];
+  var C = {};
+  datos[0].forEach(function (h, i) { C[h] = i; });
+
+  /* 1. El índice sólo crece: registrarEnIndice() añade filas y marcarObsoletos()
+     únicamente cambia el ESTADO. Una disminución no tiene explicación legítima. */
+  var filas = datos.length - 1;
+  var anterior = parseInt(
+    PropertiesService.getScriptProperties().getProperty('INDICE_FILAS') || '0', 10);
+  if (filas < anterior) {
+    problemas.push('El índice PERDIÓ registros: el respaldo anterior tenía ' +
+      anterior + ' y ahora hay ' + filas + '. El índice nunca disminuye por sí solo; ' +
+      'alguien borró filas.');
+  }
+
+  /* 2. CODIGO + VERSION irrepetible. */
+  if (C['CODIGO'] !== undefined && C['VERSION'] !== undefined) {
+    var vistos = {}, repetidos = [];
+    for (var i = 1; i < datos.length; i++) {
+      var cod = String(datos[i][C['CODIGO']] || '').trim();
+      if (!cod) continue;
+      var llave = cod + ' V' + String(datos[i][C['VERSION']] || '').trim();
+      if (vistos[llave]) {
+        if (repetidos.indexOf(llave) === -1) repetidos.push(llave);
+      } else {
+        vistos[llave] = true;
+      }
+    }
+    if (repetidos.length) {
+      problemas.push('Hay código y versión repetidos, que deberían ser irrepetibles: ' +
+        repetidos.slice(0, 10).join(', ') +
+        (repetidos.length > 10 ? ' y ' + (repetidos.length - 10) + ' más' : '') + '.');
+    }
+  }
+
+  return problemas;
+}
+
+/** Convierte la hoja a CSV según el RFC 4180: comillas dobladas, campos con
+ *  coma o salto de línea entrecomillados, y CRLF entre filas. */
+function aCSV(datos) {
+  var CRLF = String.fromCharCode(13) + String.fromCharCode(10);
+  return datos.map(function (fila) {
+    return fila.map(function (celda) {
+      var s = (celda === null || celda === undefined) ? '' : String(celda);
+      return /["\n\r,]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(',');
+  }).join(CRLF);
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     COLUMNAS_INDICE: COLUMNAS_INDICE, serieDe: serieDe,
@@ -340,6 +473,7 @@ if (typeof module !== 'undefined') {
     documentosSimilares: documentosSimilares,
     casiColisiones: casiColisiones,
     resolverConsecutivoYVersion: resolverConsecutivoYVersion,
-    codigoDe: codigoDe, retencionHasta: retencionHasta, yaRegistrado: yaRegistrado
+    codigoDe: codigoDe, retencionHasta: retencionHasta, yaRegistrado: yaRegistrado,
+    aCSV: aCSV, verificarIndice: verificarIndice
   };
 }

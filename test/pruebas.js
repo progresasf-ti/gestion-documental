@@ -380,6 +380,63 @@ const leidas = [...motor.matchAll(/C\['([A-Z_]+)'\]/g)].map(m => m[1]);
 const faltantes = [...new Set(leidas)].filter(x => cabAprob.indexOf(x) === -1);
 chk('Motor no lee columnas inexistentes', faltantes, []);
 
+/* ─────────── 14. RESPALDO DEL ÍNDICE ─────────── */
+console.log('14. Respaldo del índice');
+
+/* aCSV es puro; verificarIndice lee PropertiesService, así que se le pone un
+   doble. El resto de las pruebas no lo necesita, por eso se inyecta aquí. */
+let FILAS_ANTERIORES = '0';
+ctx.PropertiesService = {
+  getScriptProperties: () => ({ getProperty: () => FILAS_ANTERIORES })
+};
+
+const CRLF = String.fromCharCode(13) + String.fromCharCode(10);
+const NL = String.fromCharCode(10);
+
+/* --- Escapado CSV (RFC 4180). JUSTIFICACION trae comas y comillas de verdad,
+   así que un escapado flojo rompería el archivo justo en el campo más largo. */
+chk('CSV: campo simple sin adornos',
+    call('aCSV', [['a', 'b']]), 'a,b');
+chk('CSV: una coma obliga a entrecomillar',
+    call('aCSV', [['Bogotá, D.C.', 'x']]), '"Bogotá, D.C.",x');
+chk('CSV: las comillas se doblan y el campo se entrecomilla',
+    call('aCSV', [['dijo "sí"', 'x']]), '"dijo ""sí""",x');
+chk('CSV: un salto de línea obliga a entrecomillar',
+    call('aCSV', [['linea1' + NL + 'linea2']]), '"linea1' + NL + 'linea2"');
+chk('CSV: null y undefined salen vacíos, no como texto',
+    call('aCSV', [[null, undefined, 0]]), ',,0');
+chk('CSV: las filas se unen con CRLF',
+    call('aCSV', [['a'], ['b']]), 'a' + CRLF + 'b');
+
+/* --- Integridad --- */
+const CAB = ['CODIGO', 'VERSION'];
+
+chkV('índice sano: ningún problema',
+     call('verificarIndice', [CAB, ['PR-GC-001', 1], ['PR-GC-002', 1]]).length === 0);
+
+/* El caso que un chequeo ingenuo habría reventado: una v2 REUTILIZA el
+   consecutivo a propósito, así que CODIGO se repite y eso es correcto. */
+chkV('CODIGO repetido con VERSION distinta NO es problema (es una versión nueva)',
+     call('verificarIndice', [CAB, ['PR-GC-001', 1], ['PR-GC-001', 2]]).length === 0);
+
+const dup = call('verificarIndice', [CAB, ['PR-GC-001', 1], ['PR-GC-001', 1]]);
+chkV('CODIGO + VERSION repetidos SÍ es problema', dup.length === 1);
+chkV('el aviso nombra el código repetido',
+     dup.length === 1 && dup[0].indexOf('PR-GC-001 V1') > -1, dup[0]);
+
+FILAS_ANTERIORES = '5';
+const perdidas = call('verificarIndice', [CAB, ['PR-GC-001', 1], ['PR-GC-002', 1]]);
+chkV('el índice encogió: se detecta', perdidas.length === 1);
+chkV('el aviso dice cuántos había y cuántos hay',
+     perdidas.length === 1 && perdidas[0].indexOf('5') > -1 && perdidas[0].indexOf('2') > -1,
+     perdidas[0]);
+
+FILAS_ANTERIORES = '2';
+chkV('el índice creció: no es problema',
+     call('verificarIndice', [CAB, ['PR-GC-001', 1], ['PR-GC-002', 1], ['PR-GC-003', 1]]).length === 0);
+
+FILAS_ANTERIORES = '0';
+
 /* ─────────── RESULTADO ─────────── */
 console.log('\n───────────────────────────────────────');
 if (fallos.length) { console.log('FALLOS:\n' + fallos.join('\n')); }

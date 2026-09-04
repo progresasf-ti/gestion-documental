@@ -13,6 +13,7 @@ function instalarSistema() {
     INBOX_ID      : '00_BANDEJA_ENTRADA',
     REVISION_ID   : '01_EN_REVISION',
     ARCHIVO_ID    : '02_ARCHIVO_CONTROLADO',
+    RESPALDOS_ID  : '97_RESPALDOS',
     MANUAL_ID     : '98_REVISION_MANUAL',
     ORIGINALES_ID : '99_ORIGINALES'
   };
@@ -144,6 +145,12 @@ function crearDisparadores() {
      identidad del editor. Va después de guardarConfig('INDEX_SHEET_ID'). */
   ScriptApp.newTrigger('registrarDecisor')
     .forSpreadsheet(CONFIG.INDEX_SHEET_ID).onEdit().create();
+
+  /* Respaldo del indice: domingo de madrugada, para que el lunes haya una
+     foto fresca de la semana cerrada. */
+  ScriptApp.newTrigger('respaldarIndice').timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3)
+    .inTimezone(CONFIG.TIMEZONE).create();
 }
 
 /* ---------- Diagnóstico ----------------------------------------- */
@@ -161,8 +168,20 @@ function diagnostico() {
   catch (e) { r.push('✗ Falta activar Drive API en Servicios'); }
   try {
     var n = ScriptApp.getProjectTriggers().length;
-    r.push((n >= 4 ? '✓' : '✗') + ' Disparadores: ' + n + ' de 4');
+    r.push((n >= 5 ? '✓' : '✗') + ' Disparadores: ' + n + ' de 5');
   } catch (e) { r.push('✗ No se pudieron leer los disparadores'); }
+  /* Un respaldo que deja de correr en silencio es el fallo clasico de los
+     respaldos, asi que el diagnostico mira la FECHA y no solo que exista. */
+  try {
+    var ult = PropertiesService.getScriptProperties().getProperty('ULTIMO_RESPALDO');
+    if (!ult) {
+      r.push('✗ Respaldo del índice: NINGUNO todavía');
+    } else {
+      var dias = Math.floor((new Date() - new Date(ult.replace(' ', 'T'))) / 86400000);
+      r.push((dias <= 10 ? '✓' : '✗') + ' Último respaldo del índice: ' + ult +
+             ' (hace ' + dias + ' día(s))');
+    }
+  } catch (e) { r.push('✗ No se pudo leer la fecha del último respaldo'); }
   try {
     var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
       method: 'post', contentType: 'application/json', muteHttpExceptions: true,

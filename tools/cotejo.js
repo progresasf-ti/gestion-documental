@@ -59,7 +59,10 @@ var MARCADORES = [
   ['Motor.gs',        'if (PAUSADO) return;',             'guarda de pausa'],
   ['Motor.gs',        'normalizarTexto',                  'carpetas sin tildes rotas'],
   ['Motor.gs',        'casiColisiones',                   'conflicto cableado'],
-  ['Instalador.gs',   'TIPO_ID',                          'columna TIPO_ID en las hojas']
+  ['Instalador.gs',   'TIPO_ID',                          'columna TIPO_ID en las hojas'],
+  ['Indice.gs',       'function respaldarIndice',         'respaldo semanal del indice'],
+  ['Motor.gs',        'function registrarDecisor',        'quien aprobo de verdad'],
+  ['Instalador.gs',   'function carpetaBase',             'instalacion fuera de Mi unidad']
 ];
 
 var args = process.argv.slice(2);

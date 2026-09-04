@@ -87,8 +87,9 @@ minutos.
       Esperado: **✗** en `RAIZ_ID`, `INBOX_ID`, `ARCHIVO_ID`, `INDEX_SHEET_ID`
       (todavía no existen) y **✓** en el resto.
 - [ ] **2.2** Ejecutar **`instalarSistema()`**.
-- [ ] **2.3** Ejecutar `diagnostico()` otra vez. Esperado: **✓ en las 8 líneas**,
-      incluida **"Disparadores: 4 de 4"**.
+- [ ] **2.3** Ejecutar `diagnostico()` otra vez. Esperado: **✓ en las 9 líneas**,
+      incluida **"Disparadores: 5 de 5"**. La línea del último respaldo dirá
+      *"NINGUNO todavía"* — es correcto: el primero corre el domingo.
 
 > Si revienta con `CARPETA_INSTALACION no es una carpeta accesible…`, es el
 > `throw` funcionando como debe: el ID o los permisos están mal. **No cae de
@@ -99,9 +100,10 @@ minutos.
 
 # PARTE 3 — Verificar la estructura (antes de tocar nada)
 
-- [ ] **3.1** Las 5 carpetas (`00_BANDEJA_ENTRADA` … `99_ORIGINALES`) y las
-      subcarpetas por proceso dentro de `02_ARCHIVO_CONTROLADO`, **todas dentro
-      de la unidad compartida**.
+- [ ] **3.1** Las **6** carpetas (`00_BANDEJA_ENTRADA`, `01_EN_REVISION`,
+      `02_ARCHIVO_CONTROLADO`, `97_RESPALDOS`, `98_REVISION_MANUAL`,
+      `99_ORIGINALES`) y las subcarpetas por proceso dentro de
+      `02_ARCHIVO_CONTROLADO`, **todas dentro de la unidad compartida**.
 - [ ] **3.2** ⚠️ **`FT-GC-001 Listado Maestro de Documentos` está en la unidad
       compartida, NO en Mi unidad de `comercial@`.**
       Nace en Mi unidad por `SpreadsheetApp.create()` y `moveTo()` lo mueve
@@ -165,6 +167,13 @@ y seguir.
       `APROBACIONES`, y permisos: quién edita, quién sólo ve, quién puede tocar
       `02_ARCHIVO_CONTROLADO`. Es lo que convierte "Diego aprueba" de acuerdo
       verbal en control efectivo, y es lo que un auditor va a mirar.
+- [ ] **5.1b** ⚠️ **Proteger la pestaña `LISTADO_MAESTRO` ENTERA, sin excepción
+      para nadie.** El script escribe por API corriendo como dueño de la hoja,
+      así que sigue funcionando; ningún humano puede editarla a mano. Diego sólo
+      necesita `APROBACIONES`.
+      Es el fallo más probable de todo el sistema y se elimina con un ajuste de
+      Sheets, sin código: si alguien borra filas del índice, los consecutivos se
+      reutilizan y dos documentos distintos acaban con el mismo código.
 - [ ] **5.2** Actualizar `src/Config.gs` en el repositorio con el
       `CARPETA_INSTALACION` real y commitear. **Sin esto, `src/` deja de ser
       igual al editor y `tools/cotejo.js` reporta deriva permanente**, con lo
@@ -203,6 +212,29 @@ y seguir.
   Recargar *antes* no sirve.
 - ❌ **No dejar `cotejo/` llena.** Un `clasp push` sin `-P` subiría esa copia
   vieja al editor.
+
+---
+
+# El respaldo del índice — qué esperar
+
+Desde el 4-sep el sistema respalda solo el `LISTADO_MAESTRO`. No hay nada que
+configurar el lunes; sí conviene saber qué vas a ver.
+
+- **`respaldarIndice()` corre los domingos a las 3:00** y deja
+  `97_RESPALDOS/LISTADO_MAESTRO_AAAA-MM-DD.csv`. Se guardan todos.
+- **Verifica dos cosas antes de guardar**: que el índice no haya perdido
+  registros —nunca disminuye por sí solo— y que no haya `CODIGO` + `VERSION`
+  repetidos. Si algo falla manda correo y lo deja en `BITACORA`, **pero guarda
+  el respaldo igual**: la foto del estado corrupto también es evidencia.
+- **`diagnostico()` informa la fecha del último respaldo**, y la marca con ✗ si
+  pasaron más de 10 días. Un respaldo que deja de correr en silencio es el fallo
+  clásico de los respaldos.
+- La semana de la instalación **la línea dirá "NINGUNO todavía"** hasta el primer
+  domingo. Es correcto, no es un fallo.
+
+Sin copia fuera de la unidad compartida, por decisión del 4-sep: la unidad ya es
+propiedad de la empresa, que era el riesgo que A1 venía a resolver. Revisar tras
+el piloto.
 
 ---
 
@@ -266,10 +298,9 @@ razonable ya resultó falsa una vez.
   los documentos se acumulan en `01_EN_REVISION` sin perderse, pero nada se
   archiva. **Procedimiento listo en el anexo de arriba** — son permisos, no
   código.
-- **Respaldo del `LISTADO_MAESTRO`.** Es la fuente única de verdad. Si se pierde
-  o se corrompe, se pierde la trazabilidad aunque los archivos sigan en Drive.
-  **Es el único punto donde una pérdida sería irreversible**, y no tiene
-  política.
+- ~~**Respaldo del `LISTADO_MAESTRO`.**~~ ✅ **Resuelto el 4-sep** — ver la
+  sección *El respaldo del índice* arriba. Queda abierto sólo si tras el piloto
+  se decide una copia fuera de la unidad compartida.
 - **Fecha para apagar `CONSERVAR_ORIGINAL`.** Mientras esté en `true`, cada
   documento ocupa el doble.
 - **Regla 5 incompleta.** Manda los contratos de factoring al proceso `OP` pero

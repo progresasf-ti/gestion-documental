@@ -32,6 +32,7 @@ const CONFIG = {
   REVISION_ID      : '',   // 01_EN_REVISION
   ARCHIVO_ID       : '',   // 02_ARCHIVO_CONTROLADO
   MANUAL_ID        : '',   // 98_REVISION_MANUAL
+  RESPALDOS_ID     : '',   // 97_RESPALDOS (CSV semanales del indice)
   ORIGINALES_ID    : '',   // 99_ORIGINALES
   INDEX_SHEET_ID   : '',   // Listado Maestro FT-GC-001
 
@@ -59,7 +60,7 @@ const CONFIG = {
 function cargarConfig() {
   var props = PropertiesService.getScriptProperties().getProperties();
   ['RAIZ_ID','INBOX_ID','REVISION_ID','ARCHIVO_ID','MANUAL_ID','ORIGINALES_ID',
-   'INDEX_SHEET_ID','LABEL_ID'].forEach(function (k) {
+   'RESPALDOS_ID','INDEX_SHEET_ID','LABEL_ID'].forEach(function (k) {
     if (props[k]) CONFIG[k] = props[k];
   });
   return CONFIG;

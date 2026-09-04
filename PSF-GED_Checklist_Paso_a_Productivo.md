@@ -186,8 +186,37 @@ aprobó cada uno"* es una respuesta válida.
       no lo recalcula.** Cambiar la tabla más adelante sólo afecta lo que se
       archive después; lo ya archivado exigiría un script de recálculo. Con
       producción naciendo limpia, este es el momento barato para cambiarla.
-- [ ] Definir respaldo del `LISTADO_MAESTRO`. **Es la fuente única de verdad**:
+- [x] ✅ **DEFINIDO E IMPLEMENTADO 4-sep-2026.** Es la fuente única de verdad:
       si se pierde, se pierde la trazabilidad aunque los archivos sigan en Drive.
+
+  **Qué se perdería de verdad.** Buena parte del índice se podría reconstruir
+  recorriendo `02_ARCHIVO_CONTROLADO` —el nombre de cada archivo ya codifica
+  código, versión, título y fecha—. Lo irrecuperable son cuatro campos:
+  `APROBADO_POR`, `FECHA_APROBACION`, `HUELLA` y `JUSTIFICACION`. Los dos
+  primeros **son la evidencia del numeral 7.5.3.2**. El respaldo existe sobre
+  todo para proteger las firmas.
+
+  - [x] **Prevención primero.** El fallo más probable no es que Google pierda la
+        hoja: es que alguien la edite. Borrar filas es lo peor —los consecutivos
+        se reutilizan y dos documentos distintos acaban con el mismo código— y
+        es silencioso. **Proteger la pestaña `LISTADO_MAESTRO` entera**: el
+        script escribe por API como dueño y sigue funcionando; ningún humano la
+        toca. Va en el paso 5.1 del runbook.
+  - [x] **`respaldarIndice()`**, disparador semanal (domingo 3:00). Exporta el
+        índice a `97_RESPALDOS/LISTADO_MAESTRO_AAAA-MM-DD.csv`. CSV y no copia
+        de la hoja: se lee sin Google, pesa poco y dos respaldos consecutivos se
+        pueden comparar. **Se guardan todos** — no hay razón para borrar
+        respaldos de un sistema cuyo propósito es la retención.
+  - [x] **Verificación de integridad**, que es lo que más vale: el índice nunca
+        disminuye de tamaño, y `CODIGO` + `VERSION` no se repiten. Si algo falla,
+        correo y `BITACORA`. **El peligro real no es perder la hoja sino que se
+        corrompa y nadie lo note**; una copia semanal de datos ya corrompidos
+        sólo da doce copias del problema.
+  - [x] `diagnostico()` mira la **fecha** del último respaldo, no sólo que
+        exista. Un respaldo que deja de correr en silencio es el fallo clásico.
+  - [ ] **Sin copia fuera de la unidad compartida** — decisión del 4-sep. La
+        unidad compartida ya es propiedad de la empresa, que era el riesgo de A1.
+        Revisar tras el piloto.
 
 ---
 
@@ -342,7 +371,8 @@ duplicados.
       activar el servicio avanzado Drive (v3) y fijar la zona horaria en
       `America/Bogota`. ⚠️ No basta con pegar los `.gs`.
 - [ ] **C4.** Ejecutar `instalarSistema()` una vez. Autorizar los permisos.
-- [ ] **C5.** Verificar el árbol creado en la ubicación de A1:
+- [ ] **C5.** Verificar el árbol creado en la ubicación de A1 — **son 6
+      carpetas desde el 4-sep**, con `97_RESPALDOS`:
       `00_BANDEJA_ENTRADA`, `01_EN_REVISION`, `02_ARCHIVO_CONTROLADO`,
       `98_REVISION_MANUAL`, `99_ORIGINALES`, más las 10 carpetas de proceso.
 - [ ] **C6.** Verificar cabeceras de las hojas:
@@ -353,10 +383,11 @@ duplicados.
     movería `SU_DECISION` y `ESTADO`, que están cableadas por posición
   - El desplegable APROBADO/RECHAZADO sobre **`SU_DECISION`, columna 18**
   - El formato condicional reacciona a la columna **`ESTADO` ($Q)**
-- [ ] **C7.** Ejecutar `diagnostico()`. Debe dar ✓ en las 8 líneas, incluida
-      "API Anthropic responde 200" y **"Disparadores: 4 de 4"** — son cuatro
-      desde el 4-sep: los tres de tiempo más el de edición que registra al
-      aprobador.
+- [ ] **C7.** Ejecutar `diagnostico()`. Debe dar ✓ en las 9 líneas, incluida
+      "API Anthropic responde 200" y **"Disparadores: 5 de 5"** — son cinco
+      desde el 4-sep: los tres de tiempo originales, el de edición que registra
+      al aprobador, y el respaldo semanal del índice. La novena línea informa la
+      fecha del último respaldo.
 - [ ] **C8.** Poner `PAUSADO = false`.
 
 ---
