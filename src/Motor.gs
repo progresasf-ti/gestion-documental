@@ -238,10 +238,12 @@ function extensionDe(nombre) {
   return m ? m[0].toLowerCase() : '';
 }
 
+/* moveTo() en vez del par removeFile/addFile. El par es la API vieja de
+   padres multiples: en una unidad compartida un archivo tiene un solo padre,
+   y ahi ese patron falla. moveTo() sirve en Mi unidad y en unidad compartida,
+   asi que la ubicacion (A1) deja de condicionar el codigo. */
 function moverA(file, carpeta) {
-  var padres = file.getParents();
-  while (padres.hasNext()) padres.next().removeFile(file);
-  carpeta.addFile(file);
+  file.moveTo(carpeta);
 }
 
 /** Carpeta del proceso dentro del archivo controlado; la crea si no existe. */

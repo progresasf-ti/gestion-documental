@@ -53,10 +53,7 @@ function crearHoja(raiz) {
     : SpreadsheetApp.create('FT-GC-001 Listado Maestro de Documentos');
 
   try {
-    var f = DriveApp.getFileById(ss.getId());
-    var p = f.getParents();
-    while (p.hasNext()) p.next().removeFile(f);
-    raiz.addFile(f);
+    moverA(DriveApp.getFileById(ss.getId()), raiz);
   } catch (e) {}
 
   hojaCon(ss, CONFIG.INDEX_SHEET_NAME, COLUMNAS_INDICE, '#1a3a5c');
