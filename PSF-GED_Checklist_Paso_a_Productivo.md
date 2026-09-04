@@ -99,8 +99,13 @@ oculta la identidad del editor no se inventa nada: el índice queda con
       de inmediato, y el `LISTADO_MAESTRO` registró ese correo en
       `APROBADO_POR`. Google **sí** entrega la identidad del editor dentro del
       dominio. Era el único punto de la sesión sin evidencia previa.
-- [ ] Definir la cuenta ejecutora. Recomendado: cuenta de servicio o genérica
-      del área de calidad, no la cuenta personal de una persona.
+- [x] ✅ **DECIDIDA 4-sep-2026: `comercial@progresasf.com`.** Cuenta genérica
+      de la compañía, no personal.
+- [ ] ⚠️ **Verificar en la instalación definitiva que `e.user` funcione con
+      dueño y editor DISTINTOS.** En el ensayo la misma cuenta era dueña del
+      script y editora de la hoja; en producción `comercial@` es dueña y
+      `diego@` edita. Mismo dominio, así que debería funcionar — pero no está
+      probado. Es lo primero que hay que mirar tras instalar.
 - [ ] Documentar quién tiene acceso a esa cuenta.
 - [ ] Definir el procedimiento si esa cuenta cambia.
 
@@ -124,15 +129,27 @@ decidió que los estados financieros de un tercero van a GR?"*, la respuesta es
 
 Todo el control del sistema depende de que una persona escriba `APROBADO`.
 
-- [ ] Definir aprobadores y suplentes.
+- [x] ✅ **DECIDIDO 4-sep-2026: aprueba Diego.**
+- [ ] ⚠️ **Sin suplente definido.** Con un aprobador único, si Diego no está el
+      flujo se detiene: los documentos se acumulan en `01_EN_REVISION` sin
+      perderse, pero nada se archiva. No bloquea el arranque; sí hay que
+      resolverlo antes de que el sistema tenga volumen.
 - [ ] Definir permisos: quién edita la hoja `APROBACIONES`, quién solo la ve,
       quién puede tocar `02_ARCHIVO_CONTROLADO`.
 - [ ] ⚠️ **Nunca se ha probado con más de un aprobador.** Ver E4.
 
 ### A5. 🟡 Retención y respaldo
 
-- [ ] Confirmar que la tabla de retención de `TIPOS` refleja la política real
-      de la compañía (hoy: 99 años para MC/PL/CA/LG, 10 para el resto).
+- [x] ✅ **CONFIRMADA 4-sep-2026 por el usuario.** La tabla de `TIPOS` **queda
+      como está**: 99 años (permanente) para `MC`, `PL`, `CA` y `LG`; 10 años
+      para `PR`, `IT`, `FT`, `RG`, `MZ` y `DE`. No hubo cambio de código.
+      Los 10 años son la política general y coinciden con el Código de Comercio;
+      los 99 se mantienen porque `LG` son actas y contratos societarios, y
+      `MC`/`PL`/`CA` son los documentos que definen el SGC.
+      ⚠️ **`retencionHasta()` escribe el año en `RETENCION_HASTA` al archivar,
+      no lo recalcula.** Cambiar la tabla más adelante sólo afecta lo que se
+      archive después; lo ya archivado exigiría un script de recálculo. Con
+      producción naciendo limpia, este es el momento barato para cambiarla.
 - [ ] Definir respaldo del `LISTADO_MAESTRO`. **Es la fuente única de verdad**:
       si se pierde, se pierde la trazabilidad aunque los archivos sigan en Drive.
 
