@@ -25,34 +25,69 @@ Marcadores usados:
 
 ⚠️ **Esta es la decisión más costosa de revertir.**
 
-`Instalador.gs` línea 9 crea todo en `DriveApp.getRootFolder()`, es decir en
-**Mi unidad de quien ejecuta la instalación**. En una cuenta corporativa eso
+`Instalador.gs` creaba todo en `DriveApp.getRootFolder()`, es decir en **Mi
+unidad de quien ejecuta la instalación**. En una cuenta corporativa eso
 significa que el archivo documental completo queda como **propiedad personal de
 un empleado**. Si esa persona sale de la compañía y se suspende su cuenta, el
 archivo se va con ella.
 
 Para un SGC esto es un riesgo serio y contradice el propósito del sistema.
 
+⚠️ **Dato del 4-sep-2026:** el proyecto de producción corre hoy bajo
+`angel.castano@gmail.com` — una cuenta **personal de Gmail**, no de la empresa.
+Se descubrió al intentar empujar código al proyecto de ensayo con `clasp`. Es el
+banco de pruebas, así que no es grave, pero fija el punto de partida real: la
+instalación definitiva cambia de carpeta **y de cuenta**.
+
+**Lo que dependía del código ya no depende** (medido el 4-sep, ver
+`tools/sondas_A1/`):
+
+| Movimiento | API vieja | `moveTo()` |
+|---|---|---|
+| Mi unidad → Mi unidad | ✅ | ✅ |
+| Mi unidad → unidad compartida | ✅ | ✅ |
+| **dentro de la unidad compartida** | ❌ `Cannot use this operation on a shared drive item.` | ✅ |
+
+El caso que falla es el que el sistema recorre todo el tiempo una vez instalado
+allá. Ya está corregido: `moverA()` usa `moveTo()` (commit `0dc10a1`).
+
 - [ ] Decidir: **unidad compartida** (recomendado) o Mi unidad de una cuenta de servicio.
 - [ ] Si es unidad compartida: crearla y definir quién es administrador.
-- [ ] Modificar `Instalador.gs` para recibir el ID de la carpeta destino en vez de
-      usar `getRootFolder()`.
-- [ ] ⚠️ Probar el sistema completo en la unidad compartida **antes** de cargar
-      documentos reales. Las unidades compartidas manejan permisos y parentesco
-      de archivos de forma distinta, y hay tres puntos del código que dependen
-      de eso:
-  - `Motor.gs` líneas 232-233 (`moverA`): usa `removeFile`/`addFile`.
-  - `Instalador.gs` líneas 58-59: el mismo patrón, al mover la hoja.
-  - `Instalador.gs` línea 53: `SpreadsheetApp.create()` crea en Mi unidad y
-    después mueve; mover a unidad compartida exige permisos que la cuenta
-    ejecutora puede no tener.
+- [x] **Hecho 4-sep-2026.** `Instalador.gs` recibe el destino por
+      `CONFIG.CARPETA_INSTALACION` a través de `carpetaBase()`. Vacío = Mi
+      unidad (como siempre); con ID = esa carpeta. Si el ID no sirve, la
+      instalación **revienta**, no cae de vuelta a Mi unidad. Commit `704d1d1`.
+- [x] **Hecho 4-sep-2026.** `moverA()` y el traslado de la hoja usan `moveTo()`,
+      que sirve en los dos mundos. Verificado en ejecución sobre la instalación
+      actual. Commit `0dc10a1`.
+- [ ] ⚠️ **Instalación de prueba completa en una unidad compartida desechable**,
+      antes de cargar documentos reales. Es lo único que falta para que A1 se
+      decida con datos. Bloqueada el 4-sep esperando credenciales de la cuenta
+      corporativa.
+- [ ] Verificar en esa prueba que `FT-GC-001` quede **en la unidad compartida**:
+      nace en Mi unidad por `SpreadsheetApp.create()` y se mueve después.
 
 ### A2. 🔴 Con qué cuenta se instala
 
-Los disparadores corren **como el usuario que los creó**, y la columna
-`APROBADO_POR` registra `Session.getActiveUser().getEmail()`. Si esa cuenta se
+Los disparadores corren **como el usuario que los creó**. Si esa cuenta se
 suspende, el sistema deja de correr sin aviso.
 
+⚠️ **El hueco que A2 destapaba — cerrado el 4-sep-2026 (commit `25df2e2`).**
+`APROBADO_POR` registraba `Session.getActiveUser().getEmail()` desde dentro de
+`ejecutarDecisiones()`, que corre por disparador de tiempo: eso es **la cuenta
+que ejecuta, no la persona que aprobó**. Con una cuenta de servicio —que es
+justo la recomendación de este punto— todas las aprobaciones habrían quedado
+firmadas por la cuenta de servicio, y la evidencia del numeral 7.5.3.2 se
+pierde: el control existiría en el procedimiento pero no en el registro.
+
+Ahora un disparador instalable de edición captura el correo de quien escribe la
+decisión y lo deja en `DECIDIDO_POR` (columna 21 de `APROBACIONES`). Si Google
+oculta la identidad del editor no se inventa nada: el índice queda con
+`(sin identificar; ejecutó <cuenta>)`. Una firma falsa es peor que una ausente.
+
+- [ ] **Verificar en la instalación de ensayo que `e.user` sí entrega el correo**
+      dentro del dominio `progresasf.com`. Google sólo lo entrega en el mismo
+      dominio del dueño del script. Es lo primero que hay que mirar allá.
 - [ ] Definir la cuenta ejecutora. Recomendado: cuenta de servicio o genérica
       del área de calidad, no la cuenta personal de una persona.
 - [ ] Documentar quién tiene acceso a esa cuenta.
@@ -65,12 +100,13 @@ le da dueño a las reglas. Sin ella, ante la pregunta de auditoría *"¿quién
 decidió que los estados financieros de un tercero van a GR?"*, la respuesta es
 "el sistema".
 
-- [ ] Actualizar el acta con las decisiones tomadas el 1 de septiembre:
-  - Regla 6: contables de tercero → DE-GR; propios → RG-GF.
-  - Regla 9: MC, PL y CA van al proceso del que trata el documento.
-      Política de Calidad → GC.
-  - `ORIGENES` describe la relación con el tercero del NIT, no al emisor.
-  - Forma canónica del NIT: 9 dígitos + DV.
+- [x] **Hecho 3-sep-2026** (commit `0305e94`). No se reescribió el acta: se
+      redactó `docs/ACTA_COMPLEMENTARIA_REGLAS_CLASIFICACION.md`, que la
+      **complementa sin reemplazarla**. Registra las decisiones 3–8 tomadas
+      después del 31-ago, ratifica la decisión 1 corrigiendo su primer
+      fundamento, y deja tres puntos abiertos con recomendación.
+- [ ] Convertir la complementaria a PDF.
+- [ ] Llenar responsable, cargo y firma **de las dos**.
 - [ ] Firmar y archivar.
 
 ### A4. 🟡 Quién aprueba
@@ -93,7 +129,7 @@ Todo el control del sistema depende de que una persona escriba `APROBADO`.
 
 # FASE B — Preparación técnica
 
-### B1. 🟡 Identificación real de PFI — implementada, falta prueba de campo
+### B1. ✅ Identificación real de PFI — CERRADO EN EJECUCIÓN 3-sep-2026
 
 ⚠️ **La versión 1 de este checklist decía "NIT real de PFI, en forma canónica de
 10 dígitos". Esa premisa era falsa.** PFI no tiene NIT colombiano: se identifica
@@ -112,16 +148,30 @@ Hecho el 2-sep-2026:
 - [x] `test/prueba_origen.js`: sección 9, 13 aserciones (55 → 68)
 - [x] Empujado a Apps Script y cotejado (9 de 9 idénticos)
 
-⚠️ **Lo que falta, y por qué no está cerrado:**
+**Cerrado el 3-sep-2026** (commit `c713a2f`). Prueba de campo con un documento
+real de PFI:
 
-- [ ] **Ver un documento real de PFI** y confirmar en qué forma aparece el RUC.
-      Si trae sufijos (`155709241-2-2021`), `limpiarNIT()` junta los dígitos,
-      rechaza más de 10 y devuelve `null`: la identificación se pierde. El fallo
-      **no es silencioso** —o queda un aviso en NOTAS, o el documento va a
-      REVISAR— pero el reconocimiento pasa a depender de que el modelo proponga
-      `PFI` por su cuenta.
-- [ ] **Prueba de campo** con ese documento.
-- [ ] Reanudar (`PAUSADO = false`) cuando lo anterior esté resuelto.
+- [x] **Documento real visto.** El RUC no aparece con sufijos, así que la forma
+      larga nunca hizo falta — el diseño analizado el 2-sep se archiva sin
+      implementar, a propósito.
+- [x] **Prueba de campo.** Quedó
+      `LG-JR-001_V01_Contrato-Doble-Cesion-Sin-Responsabilidad_20260903.docx`,
+      **sin rastro de identificación en el nombre**, en
+      `07_Juridica/LG_Documento_Legal_Societario/PROPIO`, con `ORIGEN = PFI` y
+      `TIPO_ID`/`NIT` vacíos. Sin DV inventado.
+- [x] Reanudado (`PAUSADO = false`).
+
+De paso, el tipo **LG quedó ejercitado por primera vez** (estaba en la lista de
+tipos nunca probados, junto a MC y MZ).
+
+⚠️ **Lo que ese mismo documento destapó, y que NO es de B1:** es un instrumento
+por operación de factoring, no un documento societario, y salió `LG-JR`. La
+**regla 5 está incompleta** — manda los contratos de factoring al proceso `OP`
+pero nunca dice de qué **tipo** son, así que el modelo toma la regla 4, que sí
+responde completo. Afecta a endosos, pagarés, cartas de instrucción y contratos
+de factoring: probablemente la familia de mayor volumen del negocio. El cambio
+está redactado y **no aplicado**: por decisión del usuario se aplaza al piloto,
+donde se decidirá con volumen real y no con un caso. Ver ANEXO 5 §13.
 
 **Diseño ya analizado y aplazado a propósito** (2-sep): reconocer la forma larga
 por prefijo, aplicándolo **solo si la cadena supera los 10 dígitos** y derivando
@@ -162,8 +212,10 @@ node tools/cotejo.js        # baja el editor, compara y borra la copia
 Sale con código 0 si está conciliado y 1 si hay deriva. **Correrlo antes de
 pegar nada en corporativo.**
 
-- [ ] ⚠️ **Pendiente de A1:** si A1 decide unidad compartida, `Instalador.gs`
-      cambia y hay que rehacer el cotejo después.
+- [x] ⚠️ ~~**Pendiente de A1:** si A1 decide unidad compartida, `Instalador.gs`
+      cambia y hay que rehacer el cotejo después.~~ `Instalador.gs` ya cambió
+      (4-sep, commits `0dc10a1` y `704d1d1`) y `Motor.gs` también. **Rehacer el
+      cotejo después del próximo push.**
 
 ### B3. ✅ Suites de prueba en verde — VERIFICADO 2-sep-2026
 
@@ -230,12 +282,17 @@ duplicados.
       `00_BANDEJA_ENTRADA`, `01_EN_REVISION`, `02_ARCHIVO_CONTROLADO`,
       `98_REVISION_MANUAL`, `99_ORIGINALES`, más las 10 carpetas de proceso.
 - [ ] **C6.** Verificar cabeceras de las hojas:
-  - `LISTADO_MAESTRO`: 23 columnas, **`TIPO_ID` en la 5**, entre ORIGEN y NIT
-  - `APROBACIONES`: 20 columnas, **`TIPO_ID` en la 7**, entre ORIGEN y NIT
+  - `LISTADO_MAESTRO`: **24** columnas, **`TIPO_ID` en la 5**, entre ORIGEN y NIT
+    (la versión anterior de este checklist decía 23; estaban mal contadas)
+  - `APROBACIONES`: **21** columnas, **`TIPO_ID` en la 7**, entre ORIGEN y NIT
+  - `DECIDIDO_POR` **en la 21**, al final. Va al final a propósito: correrla
+    movería `SU_DECISION` y `ESTADO`, que están cableadas por posición
   - El desplegable APROBADO/RECHAZADO sobre **`SU_DECISION`, columna 18**
   - El formato condicional reacciona a la columna **`ESTADO` ($Q)**
 - [ ] **C7.** Ejecutar `diagnostico()`. Debe dar ✓ en las 8 líneas, incluida
-      "API Anthropic responde 200" y "Disparadores: 3 de 3".
+      "API Anthropic responde 200" y **"Disparadores: 4 de 4"** — son cuatro
+      desde el 4-sep: los tres de tiempo más el de edición que registra al
+      aprobador.
 - [ ] **C8.** Poner `PAUSADO = false`.
 
 ---
@@ -287,19 +344,28 @@ Esperado:
 
 ### D3. 🟡 Tipos sin cobertura
 
-⚠️ **MC, MZ y LG nunca se han ejercitado.** Son 3 de 10 tipos, y **LG son los
-documentos societarios**, de los más sensibles en auditoría.
+⚠️ **MC y MZ nunca se han ejercitado.** Quedan 2 de 10 tipos.
 
 - [ ] Probar un documento tipo **MC** (Manual de Calidad)
 - [ ] Probar un documento tipo **MZ** (Matriz)
-- [ ] Probar un documento tipo **LG** (Documento Legal / Societario)
+- [x] **LG ejercitado el 3-sep-2026** con el contrato real de PFI. Fue el mismo
+      documento que cerró B1, y el que destapó el hueco de la regla 5.
 
 ### D4. 🟡 Rutas de excepción
 
-Ninguna se ha probado en profundidad.
+**Prueba de campo del 3-sep-2026** (commit `563801c`): cuatro de los cinco
+eventos, verificados en ejecución real.
 
-- [ ] **Duplicado**: subir dos veces el mismo archivo → estado `DUPLICADO`
-- [ ] **Sin texto**: subir un escaneo ilegible → estado `SIN_TEXTO`, va a `01_EN_REVISION`
+- [x] **Duplicado**: copia de un documento ya archivado → `DUPLICADO` ✓
+- [x] **Sin texto**: escaneo ilegible → `SIN_TEXTO`, va a `01_EN_REVISION` ✓
+- [x] **Obsoleto**: v2 de un certificado vigente → `OBSOLETO` + `ARCHIVADO` ✓
+- [x] **Revisar**: documento genérico bajo el umbral de 0,75 → `REVISAR` ✓
+- [ ] ⚠️ **`NO_CLASIFICADO` sigue cubierto sólo por inspección, no probado.**
+      Provocarlo exige que `validarClasificacion()` falle, y con `tool_choice`
+      forzado y los enums en el esquema eso casi no ocurre con un documento
+      real. Fabricarlo habría exigido tocar el código sólo para la prueba, que
+      es sanear el caso de prueba al revés. Riesgo residual bajo: recorre el
+      mismo camino que los otros tres.
 - [ ] **Rechazo**: escribir `RECHAZADO` → el archivo va a `98_REVISION_MANUAL`
 - [ ] **Conflicto de clasificación**: mismo título y tercero, distinto tipo →
       evento `CONFLICTO` en bitácora y estado `REVISAR`
