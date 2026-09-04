@@ -2997,3 +2997,305 @@ así **no se empujaron**, porque la regla del usuario es que el push lo autoriza
 
 `src/` está limpio y **sincronizado con Apps Script** (cotejo 9/9 al momento de
 la prueba de campo). `PAUSADO = false`, `CONSERVAR_ORIGINAL = true`.
+
+---
+
+# ANEXO 6 — Sesión del 4 de septiembre de 2026
+
+> A1 deja de ser una hipótesis y pasa a ser una medición. Se cierra la parte
+> técnica de A1 y A2. La instalación de prueba queda bloqueada por una clave.
+
+---
+
+## 1. RESULTADO
+
+| | |
+|---|---|
+| `moverA()` con `moveTo()` | **cerrado, verificado en ejecución** |
+| Sondas A1 guardadas como evidencia | `tools/sondas_A1/` |
+| `Instalador.gs` recibe carpeta destino | hecho, **sin verificar en ejecución** |
+| `APROBADO_POR` registra a la persona | hecho, **sin verificar en ejecución** |
+| Checklist al día | ocho puntos corregidos |
+| Instalación de ensayo en unidad compartida | **bloqueada** |
+
+Cinco commits. `src/` empujado a Apps Script sólo hasta `0dc10a1`; lo demás está
+commiteado pero **no empujado**.
+
+---
+
+## 2. LA MEDICIÓN QUE DECIDIÓ A1
+
+El anexo 5 §16.1 decía que `removeFile`/`addFile` *"en unidades compartidas suele
+fallar"* y lo marcaba como **hipótesis fundada, no un hecho**. Se midió.
+
+| Movimiento | API vieja | `moveTo()` |
+|---|---|---|
+| Mi unidad → Mi unidad | ✅ | ✅ |
+| Mi unidad → unidad compartida | ✅ | ✅ |
+| **dentro de la unidad compartida** | ❌ excepción | ✅ |
+
+```
+Cannot use this operation on a shared drive item.
+```
+
+**La hipótesis era correcta pero por la razón equivocada.** No es el parentesco
+múltiple en general: es que la API vieja rechaza operar sobre un ítem que ya vive
+en una unidad compartida. Y ese es justo el caso que el sistema recorre todo el
+tiempo una vez instalado allá — los nueve puntos de llamada de `moverA()` mueven
+de carpeta a carpeta dentro del árbol.
+
+`makeCopy(nombre, carpeta)`, el camino de `CONSERVAR_ORIGINAL`, se midió aparte y
+funciona en ambos mundos. No se tocó.
+
+---
+
+## 3. ⚠️ EL HALLAZGO GRAVE QUE NO EXISTÍA
+
+Esto es lo más importante de la sesión, y no es código.
+
+Las dos primeras sondas leyeron los padres del archivo **sobre el mismo objeto
+`File` que habían usado para moverlo**. Apps Script deja ese objeto en caché:
+`moveTo()` lo actualiza, pero `addFile()` actúa sobre la *carpeta* y deja el
+`File` con el padre viejo.
+
+Resultado: las sondas reportaron **fallos que no existían**. Durante veinte
+minutos estuvo sobre la mesa un hallazgo aparentemente grave —que el instalador
+dejaba el `Listado Maestro` en Mi unidad en silencio, justo el riesgo que A1
+existe para eliminar— completamente falso.
+
+Lo que lo desarmó **no fue discutirlo sino medir la medición**. La sonda 3
+verifica cada movimiento de tres formas:
+
+| | Cómo | Veredicto |
+|---|---|---|
+| (a) | el objeto viejo | ❌ miente |
+| (b) | `getFileById()` recién traído | ✅ |
+| (c) | preguntar a la carpeta | ✅ en Mi unidad |
+
+```
+(a) objeto en cache   : SONDA3_origen      <- mentira
+(b) releido por ID    : SONDA3_destino     <- verdad
+(c) esta en DESTINO?  : SI
+```
+
+Detalle secundario, también medido: **(c) no sirve dentro de unidades
+compartidas.** `Folder.getFilesByName()` de DriveApp no las enumera de forma
+confiable y responde "no" aunque el archivo sí haya llegado.
+
+Lo que hizo sospechar antes que la sonda 3: `analizarBandeja()` recorre
+`inbox.getFiles()` **sin ningún filtro**, y lo único que vacía la bandeja es
+`moverA()`. Si de verdad fuera un no-op, cada archivo se reanalizaría cada 15
+minutos, llamando a la API y creando fila nueva. Eso sería imposible de no notar.
+**La operación real contradecía la medición, y la medición estaba mal.**
+
+Las tres sondas quedaron en `tools/sondas_A1/` con un README que dice esto, para
+quien escriba la próxima.
+
+---
+
+## 4. A1 — LA PARTE TÉCNICA, CERRADA
+
+### 4.1 `moverA()` (commit `0dc10a1`)
+
+```js
+function moverA(file, carpeta) {
+  file.moveTo(carpeta);
+}
+```
+
+`Instalador.gs` repetía el patrón a mano para meter la hoja en la raíz; ahora
+llama a `moverA()`. **Queda una sola implementación del movimiento** en todo el
+sistema. Verificado en ejecución sobre la instalación actual: bandeja →
+`01_EN_REVISION` → aprobación → copia en `02_ARCHIVO_CONTROLADO` y original en
+`99_ORIGINALES`. Cotejo 9/9 tras el push.
+
+### 4.2 `CARPETA_INSTALACION` (commit `704d1d1`)
+
+`Instalador.gs:9` ya no llama a `getRootFolder()` directo. `carpetaBase()` lee
+`CONFIG.CARPETA_INSTALACION`: vacío = Mi unidad (como siempre), con ID = esa
+carpeta, que puede vivir en una unidad compartida.
+
+Va en `Config.gs` porque el botón Ejecutar de Apps Script no sabe pasar
+argumentos, y porque `Config.gs` es por convención el único archivo que se edita
+a mano.
+
+**Si el ID está pero no sirve, la instalación revienta.** No cae de vuelta a Mi
+unidad. Un respaldo silencioso sería peor que un error: carpetas creadas, hoja
+creada, correo de "instalado" enviado, y el archivo documental en una cuenta
+personal. El riesgo de A1 llegando disfrazado de éxito — que es exactamente la
+clase de fallo que esta misma sesión persiguió durante veinte minutos cuando ni
+siquiera existía.
+
+Cambiar la constante **no muda una instalación existente**: crearía un árbol
+nuevo y vacío. Para este proyecto da igual (ver §6.2).
+
+---
+
+## 5. A2 — `APROBADO_POR` REGISTRA A LA PERSONA (commit `25df2e2`)
+
+`Motor.gs:220` pasaba `Session.getActiveUser().getEmail()` al índice desde dentro
+de `ejecutarDecisiones()`, que corre por disparador de tiempo. **Eso es la cuenta
+que ejecuta, no quien escribió `APROBADO`.**
+
+No era visible mientras ambas coincidían. La decisión A2 lo destapa: bajo una
+cuenta de servicio, *todas* las aprobaciones quedarían firmadas por la cuenta de
+servicio. El control del numeral 7.5.3.2 existiría en el procedimiento y no en la
+evidencia.
+
+Ahora `registrarDecisor()`, disparador **instalable** de edición, captura el
+correo del editor en el momento en que escribe la decisión y lo deja en
+`DECIDIDO_POR`, columna 21 de `APROBACIONES`. Al final a propósito: correrla
+movería `SU_DECISION` (columna 18, cableada en la lista desplegable) y `ESTADO`
+(letra Q, cableada en el formato condicional).
+
+**Dos decisiones que parecen detalle y no lo son:**
+
+- `correoDelEditor()` **no tiene respaldo** con `Session.getActiveUser()`. En un
+  disparador instalable eso devuelve al dueño del disparador — el dato equivocado
+  que la función existe para no registrar.
+- `aprobadorDe()` no deja el campo en blanco: escribe
+  `(sin identificar; ejecutó <cuenta>)`. **Una firma falsa es peor que una
+  ausente**, y una casilla vacía no explica por qué está vacía.
+
+Falta verificar que `e.user` entregue el correo dentro de `progresasf.com`.
+Google sólo lo hace en el dominio del dueño del script. Es lo primero que hay que
+mirar en el ensayo.
+
+**Consecuencia en el banco de pruebas:** `hojaCon()` sólo escribe cabeceras si la
+hoja está vacía, así que la instalación actual no va a tener la columna
+`DECIDIDO_POR` y empezará a registrar `(sin identificar; …)`. Es más honesto que
+lo que registra hoy, que es la cuenta del disparador haciéndose pasar por
+aprobador. Se corrige solo en producción, que nace limpia.
+
+---
+
+## 6. DOS DATOS DE GOBIERNO QUE APARECIERON SOLOS
+
+### 6.1 Producción corre bajo una cuenta personal de Gmail
+
+Se descubrió por accidente: `clasp` no pudo empujar al proyecto de ensayo y al
+preguntarle con qué cuenta estaba autenticado respondió `angel.castano@gmail.com`.
+El push a producción sí funciona con esa cuenta, o sea que **el proyecto de PSF
+GED vive hoy en una cuenta personal de Gmail**, no de la empresa.
+
+Para un banco de pruebas está bien. Convierte A2 de recomendación en hecho
+medido: la instalación definitiva cambia de carpeta **y de cuenta**.
+
+### 6.2 Producción nace limpia — decisión del usuario
+
+No se migra nada del banco de pruebas: ni carpetas, ni `LISTADO_MAESTRO`, ni los
+documentos ya archivados. La instalación definitiva **nace vacía**.
+
+Elimina de raíz el problema de mudar una instalación con documentos y un índice
+vivo. **No hay migración que diseñar.** Consecuencias, todas deseables:
+
+- consecutivos y huellas arrancan de cero;
+- los `ORIGEN` fijados durante las pruebas no contaminan producción;
+- la instalación de prueba de A1 debe hacerse en una unidad compartida
+  **desechable**, no en la definitiva.
+
+---
+
+## 7. EL CHECKLIST SE PUSO AL DÍA (commit `88f7283`)
+
+Ocho puntos, ninguno de redacción: todos decían algo que ya era falso. A1 (líneas
+de código que ya no existen), A2, A3 (el acta sí se actualizó, el 3-sep), B1
+(cerrado en ejecución desde el 3-sep), B2, C6, C7, D3, D4.
+
+De paso, un error viejo: **`LISTADO_MAESTRO` tiene 24 columnas y el checklist
+decía 23.** Los conteos no se copiaron del checklist anterior, se extrajeron del
+código.
+
+---
+
+## 8. POR QUÉ EL ENSAYO QUEDÓ BLOQUEADO
+
+El plan acordado: ensayo en unidad compartida **desechable** → verificar todo →
+instalación definitiva y limpia en la unidad compartida real.
+
+El proyecto de ensayo existe (`PSF GED — ENSAYO unidad compartida`) y la copia
+del código está lista, con `PAUSADO = true`, `ALERT_EMAIL` apuntando a
+`tecnologia@progresasf.com` y el ID de la carpeta puesto. **No se pudo empujar:
+`clasp` está autenticado como la cuenta personal y el proyecto pertenece a la
+corporativa.** La solución es `clasp login --user progresasf`, que quedó
+esperando la clave.
+
+⚠️ **Antes de instalar el ensayo hay que cambiar `ALERT_EMAIL`.** Con el valor de
+producción, `instalarSistema()` le manda a Diego un correo de "sistema instalado"
+que no corresponde a nada, y `resumenDiario()` le manda un resumen diario de un
+sistema de pruebas. Ya está contemplado en la copia.
+
+También: empujar el manifiesto activa solo el servicio avanzado de Drive, así que
+ese paso del checklist se resuelve gratis.
+
+---
+
+## 9. PENDIENTES ACTUALIZADOS
+
+**Lo que desbloquea todo**
+1. `clasp login --user progresasf` y empujar el ensayo.
+2. Instalación de prueba completa en la unidad compartida desechable.
+3. Verificar allá: el árbol y **`FT-GC-001` dentro de la unidad compartida**; los
+   movimientos entre carpetas; y que `e.user` entregue el correo real.
+
+**Documentación**
+4. Acta complementaria a PDF, con responsable, cargo y firma.
+5. Instructivo: pantallazos, codificación SGC y firma.
+
+**Deuda técnica: sin cambios** (pasaportes, `NOMBRE_ARCHIVO` al obsoletar,
+originales sin marcar, guarda `razonSocial` vs `titulo`, regla 10, refactor de
+`formatearAprobaciones()`, structured outputs), más la **regla 5 incompleta**,
+aplazada al piloto por decisión del usuario.
+
+**Decisiones abiertas** A1 (a un ensayo de cerrarse), A2, A4, A5.
+
+---
+
+## 10. LECCIONES DE MÉTODO
+
+- **Medir la medición.** Una sonda mal instrumentada produce hallazgos falsos con
+  toda la apariencia de ser reales. El antídoto no es discutir el resultado sino
+  verificarlo por una vía independiente. Es la tercera vez en este proyecto que
+  una herramienta de verificación vale más que la conclusión que produjo; las dos
+  anteriores fueron `cotejo.js`.
+- **Cuando la medición contradice la operación, sospechar de la medición.** El
+  sistema llevaba días archivando bien. Eso era evidencia, y pesaba más que una
+  sonda escrita hacía diez minutos.
+- **Una hipótesis puede acertar por la razón equivocada.** El anexo 5 predijo el
+  fallo en unidades compartidas y acertó; pero la causa real era otra, y con la
+  causa equivocada se habría probado el caso equivocado.
+- **Fallar ruidosamente es una decisión de diseño, no un descuido.** Tanto
+  `carpetaBase()` como `aprobadorDe()` se escribieron para negarse a inventar un
+  dato plausible. En un sistema cuyo propósito es la evidencia, el silencio que
+  parece éxito es el peor modo de falla.
+- **Separar los commits vale el trabajo extra.** A1 y A2 quedaron entremezclados
+  en `Instalador.gs` por no haber commiteado el primero a tiempo. Deshacer los
+  cambios del segundo, commitear el primero y restaurar costó cinco minutos y
+  dejó una historia que se puede leer.
+- **Un dato de gobierno puede llegar por un mensaje de error.** Que producción
+  viva en una cuenta personal de Gmail no lo dijo nadie: lo dijo `clasp` al
+  negarse a empujar.
+
+---
+
+## 11. ESTADO DEL REPOSITORIO AL CIERRE
+
+```
+88f7283  El checklist se pone al dia                    <- sin empujar
+25df2e2  APROBADO_POR registra a la persona (A2)        <- sin empujar
+704d1d1  El instalador puede plantar fuera de Mi unidad <- sin empujar
+a29dffa  Sondas A1                                      <- sin empujar
+0dc10a1  moverA() usa moveTo()                          <- sin empujar a GitHub,
+                                                           SI empujado a Apps Script
+5a7c7d9  ANEXO 5 (cierre)                               <- sin empujar
+```
+
+**Nueve commits locales por delante de `origin/main`.** El push a GitHub lo
+autoriza el usuario y quedó sin hacer.
+
+⚠️ **`src/` y el editor de Apps Script están derivados.** El editor tiene hasta
+`0dc10a1`; le faltan `704d1d1` y `25df2e2`. **Hay que empujar y rehacer el
+cotejo.** Se dejó así porque el push exige que la pestaña del editor esté cerrada
+y la pregunta quedó sin responder.
+
+`PAUSADO = false`, `CONSERVAR_ORIGINAL = true`, `CARPETA_INSTALACION` vacío.
