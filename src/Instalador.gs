@@ -86,7 +86,7 @@ function crearHoja(raiz) {
     'TIPO_ID', 'NIT',
     'RAZON_SOCIAL', 'TITULO_PROPUESTO', 'FECHA_DOCUMENTO', 'NOMBRE_PROPUESTO',
     'CONFIANZA', 'JUSTIFICACION', 'HUELLA', 'NOTAS', 'ESTADO',
-    'SU_DECISION', 'NOMBRE_FINAL', 'RESULTADO'
+    'SU_DECISION', 'NOMBRE_FINAL', 'RESULTADO', 'DECIDIDO_POR'
   ], '#7a4a00');
   hojaCon(ss, CONFIG.LOG_SHEET_NAME, ['FECHA', 'EVENTO', 'OBJETO', 'DETALLE'], '#444444');
 
@@ -119,7 +119,7 @@ function formatearAprobaciones(h) {
     .build();
   h.getRange(2, col, 2000, 1).setDataValidation(regla);
 
-  var rango = h.getRange(2, 1, 2000, 20);
+  var rango = h.getRange(2, 1, 2000, 21);
   var reglas = [
     SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=$Q2="REVISAR"').setBackground('#fff3cd').setRanges([rango]).build(),
@@ -138,6 +138,12 @@ function crearDisparadores() {
   ScriptApp.newTrigger('ejecutarDecisiones').timeBased().everyMinutes(15).create();
   ScriptApp.newTrigger('resumenDiario').timeBased().atHour(7).everyDays(1)
     .inTimezone(CONFIG.TIMEZONE).create();
+
+  /* Captura quién escribió la decisión, en el momento en que la escribe.
+     Tiene que ser INSTALABLE: un onEdit simple no alcanza a leer la
+     identidad del editor. Va después de guardarConfig('INDEX_SHEET_ID'). */
+  ScriptApp.newTrigger('registrarDecisor')
+    .forSpreadsheet(CONFIG.INDEX_SHEET_ID).onEdit().create();
 }
 
 /* ---------- Diagnóstico ----------------------------------------- */
@@ -155,7 +161,7 @@ function diagnostico() {
   catch (e) { r.push('✗ Falta activar Drive API en Servicios'); }
   try {
     var n = ScriptApp.getProjectTriggers().length;
-    r.push((n >= 3 ? '✓' : '✗') + ' Disparadores: ' + n + ' de 3');
+    r.push((n >= 4 ? '✓' : '✗') + ' Disparadores: ' + n + ' de 4');
   } catch (e) { r.push('✗ No se pudieron leer los disparadores'); }
   try {
     var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {

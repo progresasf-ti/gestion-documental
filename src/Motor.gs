@@ -217,7 +217,7 @@ function aplicarArchivado(fila, C, numFila, hoja) {
   if (decision.obsoletar.length) marcarObsoletos(decision.obsoletar, nombre);
 
   registrarEnIndice(c, decision, nombre, objetivo.getId(), carpeta.getName(),
-                    Session.getActiveUser().getEmail());
+                    aprobadorDe(fila, C));
 
   /* Si la herencia cambió el origen, la celda de la hoja quedaría mintiendo. */
   if (c.origen !== String(fila[C['ORIGEN']] || '').trim().toUpperCase()) {
@@ -229,6 +229,89 @@ function aplicarArchivado(fila, C, numFila, hoja) {
   hoja.getRange(numFila, C['RESULTADO'] + 1)
       .setValue('Archivado en ' + carpeta.getName() + (decision.esNuevaVersion ? ' como versión ' + decision.version : ''));
   bitacora('ARCHIVADO', nombre, carpeta.getName());
+}
+
+/* ================= QUIÉN APROBÓ ================================== */
+
+/**
+ * Disparador de edición sobre la hoja. Captura QUIÉN escribió la decisión, en
+ * el momento en que la escribe, y lo deja en DECIDIDO_POR.
+ *
+ * Existe porque ejecutarDecisiones() corre desde un disparador de tiempo:
+ * ahí Session.getActiveUser() devuelve la cuenta que ejecuta, no la persona.
+ * Con una cuenta de servicio —que es la recomendación de A2— todas las
+ * aprobaciones quedarían firmadas por la cuenta de servicio y la evidencia
+ * del numeral 7.5.3.2 se perdería: el control existiría en el procedimiento
+ * pero no en el registro.
+ *
+ * Tiene que instalarse como disparador (lo hace crearDisparadores). Un onEdit
+ * simple no sirve: no alcanza a leer la identidad del editor.
+ */
+function registrarDecisor(e) {
+  try {
+    if (!e || !e.range) return;
+    var hoja = e.range.getSheet();
+    if (hoja.getName() !== CONFIG.QUEUE_SHEET_NAME) return;
+
+    var cab = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    var colDecision = cab.indexOf('SU_DECISION') + 1;
+    var colQuien = cab.indexOf('DECIDIDO_POR') + 1;
+    if (!colDecision || !colQuien) return;
+
+    /* La edición puede abarcar varias celdas: alguien pega una columna entera
+       de APROBADO. Sólo interesa si el rango tocado incluye SU_DECISION. */
+    var primeraCol = e.range.getColumn();
+    var ultimaCol = primeraCol + e.range.getNumColumns() - 1;
+    if (colDecision < primeraCol || colDecision > ultimaCol) return;
+
+    var quien = correoDelEditor(e);
+    if (!quien) return;   // sin identidad no se escribe: vacío es mejor que falso
+
+    var primeraFila = e.range.getRow();
+    for (var i = 0; i < e.range.getNumRows(); i++) {
+      var fila = primeraFila + i;
+      if (fila === 1) continue;   // la cabecera no se firma
+      /* Si borró la decisión en vez de escribirla, no hay nada que firmar. */
+      if (!String(hoja.getRange(fila, colDecision).getValue() || '').trim()) continue;
+      hoja.getRange(fila, colQuien).setValue(quien);
+    }
+  } catch (err) {
+    /* Un disparador de edición que revienta bloquearía la hoja para el usuario.
+       El costo de fallar es una firma que falta, y eso ya se ve en el índice. */
+    bitacora('ERROR', 'registrarDecisor', String(err.message || err));
+  }
+}
+
+/**
+ * Correo de quien editó. Google sólo entrega la identidad si el editor está en
+ * el mismo dominio que el dueño del script; fuera de ahí devuelve vacío.
+ *
+ * NO hay respaldo con Session.getActiveUser(): en un disparador instalable eso
+ * devuelve al dueño del disparador, que es justamente el dato equivocado que
+ * esta función existe para no registrar.
+ */
+function correoDelEditor(e) {
+  try {
+    if (e.user && e.user.getEmail) return e.user.getEmail() || '';
+  } catch (err) {}
+  return '';
+}
+
+/**
+ * Quién aprobó, para el LISTADO_MAESTRO. Sale de DECIDIDO_POR.
+ *
+ * Si está vacío —disparador no instalado, hoja de una instalación anterior sin
+ * la columna, o identidad oculta por Google— se registra la cuenta que ejecuta
+ * PERO MARCADA como tal. Nunca se hace pasar el disparador por una persona:
+ * ante una auditoría del 7.5.3.2, una firma falsa es peor que una ausente.
+ */
+function aprobadorDe(fila, C) {
+  var quien = C['DECIDIDO_POR'] === undefined
+    ? '' : String(fila[C['DECIDIDO_POR']] || '').trim();
+  if (quien) return quien;
+  var cuenta = '';
+  try { cuenta = Session.getActiveUser().getEmail() || ''; } catch (e) {}
+  return '(sin identificar; ejecutó ' + (cuenta || 'cuenta desconocida') + ')';
 }
 
 /* ================= AUXILIARES ==================================== */
@@ -280,7 +363,7 @@ function encolar(file, c, propuesta, estado, notas, similares) {
     c && c.nit ? (c.tipoId || 'NIT') : '', c ? (c.nit || '') : '',
     c ? c.razonSocial : '', c ? c.titulo : '', c ? c.fechaDocumento : '',
     propuesta ? propuesta.nombre : '', c ? c.confianza : '', c ? c.justificacion : '',
-    c ? (c.huella || '') : '', notas, estado, '', '', ''
+    c ? (c.huella || '') : '', notas, estado, '', '', '', ''
   ]);
 }
 
