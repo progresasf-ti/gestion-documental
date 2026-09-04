@@ -301,6 +301,14 @@ razonable ya resultó falsa una vez.
 - ~~**Respaldo del `LISTADO_MAESTRO`.**~~ ✅ **Resuelto el 4-sep** — ver la
   sección *El respaldo del índice* arriba. Queda abierto sólo si tras el piloto
   se decide una copia fuera de la unidad compartida.
+- ⏳ **DECISIÓN PENDIENTE PARA HOY: ¿`respaldarIndice()` debe respetar
+  `PAUSADO`?** Hoy no lo hace, y es la única función del sistema que rompe esa
+  convención. El razonamiento: `PAUSADO` existe para que el sistema deje de
+  *actuar* sobre documentos durante un mantenimiento, y el respaldo sólo lee —
+  un mantenimiento largo que apagara los respaldos en silencio sería justo el
+  fallo que esa función viene a evitar. El argumento en contra es la
+  consistencia: quien lea el código espera que `PAUSADO` apague todo.
+  **Cambiarlo es una línea.** Decide Angel.
 - **Fecha para apagar `CONSERVAR_ORIGINAL`.** Mientras esté en `true`, cada
   documento ocupa el doble.
 - **Regla 5 incompleta.** Manda los contratos de factoring al proceso `OP` pero
